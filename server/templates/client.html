@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>Запись на приём - MedHub</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    body {
+      background: linear-gradient(135deg, #f0f2f5, #dbeafe);
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 20px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      position: relative;
+    }
+    .lang-switch {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+    }
+    .lang-switch button {
+      margin-right: 10px;
+      padding: 5px 10px;
+      border: none;
+      border-radius: 3px;
+      background: #34d399;
+      color: white;
+      cursor: pointer;
+      transition: 0.3s;
+    }
+    .lang-switch button:hover {
+      opacity: 0.9;
+    }
+    .container {
+      background: #fff;
+      padding: 30px;
+      border-radius: 10px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+      max-width: 600px;
+      width: 100%;
+    }
+    h1 {
+      text-align: center;
+      color: #333;
+      margin-bottom: 20px;
+    }
+    p {
+      text-align: center;
+      font-size: 18px;
+      color: #555;
+    }
+    .form-group {
+      margin-bottom: 15px;
+    }
+    label {
+      display: block;
+      font-weight: bold;
+      color: #444;
+      margin-bottom: 5px;
+    }
+    input[type="text"],
+    input[type="number"],
+    textarea,
+    select {
+      width: 100%;
+      padding: 10px;
+      border: 1px solid #ddd;
+      border-radius: 5px;
+      font-size: 16px;
+    }
+    textarea {
+      resize: vertical;
+      min-height: 80px;
+    }
+    .radio-group {
+      display: flex;
+      gap: 20px;
+      align-items: center;
+    }
+    .radio-group label {
+      font-weight: normal;
+    }
+    button {
+      width: 100%;
+      padding: 12px;
+      border-radius: 5px;
+      border: none;
+      background: linear-gradient(45deg, #34d399, #10b981);
+      color: #fff;
+      font-size: 18px;
+      cursor: pointer;
+      transition: 0.3s;
+    }
+    button:hover {
+      opacity: 0.9;
+    }
+    .hidden {
+      display: none;
+    }
+  </style>
+  <!-- Telegram Web Apps SDK -->
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+</head>
+<body>
+  <!-- Переключатель языка -->
+  <div class="lang-switch">
+    <button onclick="changeLanguage('ru')">Русский</button>
+    <button onclick="changeLanguage('kz')">Қазақша</button>
+  </div>
+  <div class="container">
+    <!-- Шаг 1: Приветствие -->
+    <div id="step1">
+      <h1 id="step1_title">Здравствуйте!</h1>
+      <p id="step1_message">Добро пожаловать в MedHub. Чем могу помочь?</p>
+      <button id="btnStart">Записаться на приём</button>
+    </div>
+    
+    <!-- Шаг 2: Заполнение данных пациента -->
+    <div id="step2" class="hidden">
+      <h1 id="step2_title">Данные пациента</h1>
+      <div class="form-group">
+        <label id="label_age" for="age">Возраст:</label>
+        <input type="number" id="age" name="age" placeholder="" required>
+      </div>
+      <div class="form-group">
+        <label id="label_gender">Пол:</label>
+        <div class="radio-group">
+          <label>
+            <input type="radio" name="gender" value="Муж" required> 
+            <span id="gender_male_text">Муж</span>
+          </label>
+          <label>
+            <input type="radio" name="gender" value="Жен" required> 
+            <span id="gender_female_text">Жен</span>
+          </label>
+        </div>
+      </div>
+      <div class="form-group">
+        <label id="label_complaints" for="complaints">Жалобы (кратко):</label>
+        <textarea id="complaints" name="complaints" placeholder="" required></textarea>
+      </div>
+      <div class="form-group">
+        <label id="label_duration" for="duration">Сколько времени беспокоит (в днях):</label>
+        <input type="number" id="duration" name="duration" placeholder="" required>
+      </div>
+      <button id="btnToStep3">Далее</button>
+    </div>
+    
+    <!-- Шаг 3: Выбор врача/специальности -->
+    <div id="step3" class="hidden">
+      <h1 id="step3_title">Выберите врача/специальность</h1>
+      <div class="form-group">
+        <label id="label_specialty" for="specialty">Специальность:</label>
+        <select id="specialty" name="specialty" required>
+          <option value="" id="option_specialty_default">Выберите специальность</option>
+          <option value="Терапевт" id="option_therapist">Терапевт</option>
+          <option value="Хирург" id="option_surgeon">Хирург</option>
+          <option value="Кардиолог" id="option_cardiologist">Кардиолог</option>
+          <option value="Невролог" id="option_neurologist">Невролог</option>
+          <option value="ЛОР" id="option_lor">ЛОР</option>
+          <option value="Врач на дому" id="option_home_doctor">Врач на дому</option>
+          <option value="Медсестра на дому" id="option_home_nurse">Медсестра на дому</option>
+          <option value="Анализ" id="option_analysis">Анализ</option>
+          <option value="Капельница к медперсоналу" id="option_iv_drip">Капельница к медперсоналу</option>
+        </select>
+      </div>
+      <button id="btnToStep4">Далее</button>
+    </div>
+    
+    <!-- Шаг 4: Подтверждение записи -->
+    <div id="step4" class="hidden">
+      <h1 id="step4_title">Подтверждение записи</h1>
+      <p id="summary"></p>
+      <button id="btnConfirm">Подтвердить запись</button>
+    </div>
+    
+    <!-- Шаг 5: Финальное сообщение -->
+    <div id="step5" class="hidden">
+      <h1 id="step5_title">Спасибо!</h1>
+      <p id="step5_message">Ваша запись подтверждена. Врач скоро свяжется с вами.</p>
+    </div>
+  </div>
+  
+  <script>
+    // Инициализация Telegram Web Apps
+    Telegram.WebApp.ready();
+    if (Telegram.WebApp.expand) {
+      Telegram.WebApp.expand();
+    }
+    
+    // Объект с переводами для русского и казахского языков
+    const translations = {
+      ru: {
+        step1_title: "Здравствуйте!",
+        step1_message: "Добро пожаловать в MedHub. Чем могу помочь?",
+        btn_start: "Записаться на приём",
+        step2_title: "Данные пациента",
+        label_age: "Возраст:",
+        label_gender: "Пол:",
+        gender_male: "Муж",
+        gender_female: "Жен",
+        label_complaints: "Жалобы (кратко):",
+        label_duration: "Сколько времени беспокоит (в днях):",
+        btn_to_step3: "Далее",
+        step3_title: "Выберите врача/специальность",
+        label_specialty: "Специальность:",
+        option_specialty_default: "Выберите специальность",
+        option_therapist: "Терапевт",
+        option_surgeon: "Хирург",
+        option_cardiologist: "Кардиолог",
+        option_neurologist: "Невролог",
+        option_lor: "ЛОР",
+        option_home_doctor: "Врач на дому",
+        option_home_nurse: "Медсестра на дому",
+        option_analysis: "Анализ",
+        option_iv_drip: "Капельница к медперсоналу",
+        btn_to_step4: "Далее",
+        step4_title: "Подтверждение записи",
+        btn_confirm: "Подтвердить запись",
+        step5_title: "Спасибо!",
+        step5_message: "Ваша запись подтверждена. Врач скоро свяжется с вами."
+      },
+      kz: {
+        step1_title: "Сәлеметсіз бе!",
+        step1_message: "MedHub-қа қош келдіңіз. Қалай көмектесе аламын?",
+        btn_start: "Кездесуге жазылу",
+        step2_title: "Науқастың деректері",
+        label_age: "Жасы:",
+        label_gender: "Жынысы:",
+        gender_male: "Ер",
+        gender_female: "Әйел",
+        label_complaints: "Шағымдар (қысқа):",
+        label_duration: "Мәселе қанша күн болды:",
+        btn_to_step3: "Келесі",
+        step3_title: "Дәрігер/мамандығын таңдаңыз",
+        label_specialty: "Мамандығы:",
+        option_specialty_default: "Мамандығын таңдаңыз",
+        option_therapist: "Терапевт",
+        option_surgeon: "Хирург",
+        option_cardiologist: "Кардиолог",
+        option_neurologist: "Невролог",
+        option_lor: "ЛОР",
+        option_home_doctor: "Үйде дәрігер",
+        option_home_nurse: "Үйде медбике",
+        option_analysis: "Анализ",
+        option_iv_drip: "Медперсоналға капельница",
+        btn_to_step4: "Келесі",
+        step4_title: "Жазылымды растау",
+        btn_confirm: "Жазылымды растау",
+        step5_title: "Рақмет!",
+        step5_message: "Сіздің жазылымыңыз расталды. Дәрігер жақын арада хабарласады."
+      }
+    };
+    
+    let currentLanguage = "ru";
+    
+    // Функция обновления текстов согласно выбранному языку
+    function updateLanguage() {
+      const t = translations[currentLanguage];
+      // Шаг 1
+      document.getElementById("step1_title").textContent = t.step1_title;
+      document.getElementById("step1_message").textContent = t.step1_message;
+      document.getElementById("btnStart").textContent = t.btn_start;
+      // Шаг 2
+      document.getElementById("step2_title").textContent = t.step2_title;
+      document.getElementById("label_age").textContent = t.label_age;
+      document.getElementById("label_gender").textContent = t.label_gender;
+      document.getElementById("gender_male_text").textContent = t.gender_male;
+      document.getElementById("gender_female_text").textContent = t.gender_female;
+      document.getElementById("label_complaints").textContent = t.label_complaints;
+      document.getElementById("label_duration").textContent = t.label_duration;
+      document.getElementById("btnToStep3").textContent = t.btn_to_step3;
+      // Шаг 3
+      document.getElementById("step3_title").textContent = t.step3_title;
+      document.getElementById("label_specialty").textContent = t.label_specialty;
+      document.getElementById("option_specialty_default").textContent = t.option_specialty_default;
+      document.getElementById("option_therapist").textContent = t.option_therapist;
+      document.getElementById("option_surgeon").textContent = t.option_surgeon;
+      document.getElementById("option_cardiologist").textContent = t.option_cardiologist;
+      document.getElementById("option_neurologist").textContent = t.option_neurologist;
+      document.getElementById("option_lor").textContent = t.option_lor;
+      document.getElementById("option_home_doctor").textContent = t.option_home_doctor;
+      document.getElementById("option_home_nurse").textContent = t.option_home_nurse;
+      document.getElementById("option_analysis").textContent = t.option_analysis;
+      document.getElementById("option_iv_drip").textContent = t.option_iv_drip;
+      document.getElementById("btnToStep4").textContent = t.btn_to_step4;
+      // Шаг 4
+      document.getElementById("step4_title").textContent = t.step4_title;
+      document.getElementById("btnConfirm").textContent = t.btn_confirm;
+      // Шаг 5
+      document.getElementById("step5_title").textContent = t.step5_title;
+      document.getElementById("step5_message").textContent = t.step5_message;
+    }
+    
+    // Переключение языка
+    function changeLanguage(lang) {
+      currentLanguage = lang;
+      updateLanguage();
+    }
+    
+    // Изначально обновляем язык
+    updateLanguage();
+    
+    // Функция для показа нужного шага
+    function showStep(stepId) {
+      const steps = ['step1', 'step2', 'step3', 'step4', 'step5'];
+      steps.forEach(id => {
+        document.getElementById(id).classList.add('hidden');
+      });
+      document.getElementById(stepId).classList.remove('hidden');
+    }
+    
+    // Шаг 1: Приветствие → переход к шагу 2
+    document.getElementById('btnStart').addEventListener('click', function() {
+      showStep('step2');
+    });
+    
+    // Шаг 2: Данные пациента → переход к шагу 3
+    document.getElementById('btnToStep3').addEventListener('click', function() {
+      const age = document.getElementById('age').value;
+      const genderEls = document.getElementsByName('gender');
+      let gender = '';
+      for (const el of genderEls) {
+        if (el.checked) {
+          gender = el.value;
+          break;
+        }
+      }
+      const complaints = document.getElementById('complaints').value;
+      const duration = document.getElementById('duration').value;
+      
+      if (!age || !gender || !complaints || !duration) {
+        alert("Пожалуйста, заполните все поля");
+        return;
+      }
+      
+      window.patientData = {
+        age: age,
+        gender: gender,
+        complaints: complaints,
+        duration: duration
+      };
+      
+      showStep('step3');
+    });
+    
+    // Шаг 3: Выбор врача/специальности → переход к шагу 4
+    document.getElementById('btnToStep4').addEventListener('click', function() {
+      const specialty = document.getElementById('specialty').value;
+      if (!specialty) {
+        alert("Пожалуйста, выберите специальность");
+        return;
+      }
+      window.patientData.specialty = specialty;
+      
+      // Формирование сводной информации
+      const t = translations[currentLanguage];
+      const summaryText = `
+        <strong>${t.label_age}</strong> ${window.patientData.age} <br>
+        <strong>${t.label_gender}</strong> ${window.patientData.gender} <br>
+        <strong>${t.label_complaints}</strong> ${window.patientData.complaints} <br>
+        <strong>${t.label_duration}</strong> ${window.patientData.duration} <br>
+        <strong>${t.label_specialty}</strong> ${window.patientData.specialty}
+      `;
+      document.getElementById('summary').innerHTML = summaryText;
+      
+      showStep('step4');
+    });
+    
+    // Шаг 4: Подтверждение → переход к шагу 5
+    document.getElementById('btnConfirm').addEventListener('click', function() {
+      // Здесь можно добавить отправку данных на сервер и уведомление врача
+      showStep('step5');
+    });
+  </script>
+</body>
+</html>
