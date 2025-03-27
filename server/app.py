@@ -35,6 +35,8 @@ def client():
         gender    = request.form.get('gender')
         age       = request.form.get('age')
         problem   = request.form.get('problem')
+        contacts  = request.form.get('contacts')
+        address   = request.form.get('address')
         # Для демонстрации возвращаем полученные данные
         return f"""
         <h2>Данные клиента получены:</h2>
@@ -42,8 +44,11 @@ def client():
         <p>Пол: {gender}</p>
         <p>Возраст: {age}</p>
         <p>Проблема: {problem}</p>
+        <p>Контакты: {contacts}</p>
+        <p>Адрес: {address}</p>
         """
     return render_template('client.html')
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    # Запуск сервера на всех интерфейсах и порту 5001
+    app.run(host='0.0.0.0', port=5001, debug=True)
