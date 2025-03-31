@@ -4,6 +4,7 @@ import (
 	"context"
 	"doctor/config"
 	"doctor/traits/logger"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -13,6 +14,20 @@ import (
 	"github.com/go-telegram/bot/models"
 	"go.uber.org/zap"
 )
+
+// PatientData представляет данные, отправляемые с мини-приложения
+type PatientData struct {
+	FullName   string `json:"fullName"`
+	Age        string `json:"age"`
+	Gender     string `json:"gender"`
+	Complaints string `json:"complaints"`
+	Duration   string `json:"duration"`
+	Specialty  string `json:"specialty"`
+	Contacts   string `json:"contacts"`
+	Address    string `json:"address"`
+	UserID     string `json:"user_id"`
+	InitData   string `json:"initData"`
+}
 
 func main() {
 	zapLogger, err := logger.NewLogger()
@@ -41,7 +56,7 @@ func main() {
 		return
 	}
 
-	// Передаём экземпляр бота в веб-сервер.
+	// Запуск веб-сервера для обработки запросов мини-приложения
 	go startWebServer(cfg.Token)
 	zapLogger.Info("started bot")
 	b.Start(ctx)
@@ -52,12 +67,8 @@ func handler(ctx context.Context, b *bot.Bot, update *models.Update) {
 		return
 	}
 
-	// Извлекаем user_id из сообщения и конвертируем его в строку.
-	//userIDStr := strconv.FormatInt(update.Message.From.ID, 10)
-	// Формируем URL, добавляя user_id как параметр запроса.
-	//webAppURL := "https://60d2a8a97c10e8ff67f9ab2f87aaf166.serveo.net/?user_id=" + userIDStr
-	webAppURL := "https://e423-89-219-13-135.ngrok-free.app/doctor"
-	// Создаем inline-клавиатуру с кнопкой, открывающей мини-приложение
+	// Формируем URL для открытия мини-приложения
+	webAppURL := "https://ba2c1bcf6cb9b3282b29ce19c2090862.serveo.net/doctor"
 	keyboard := models.InlineKeyboardMarkup{
 		InlineKeyboard: [][]models.InlineKeyboardButton{
 			{
@@ -81,10 +92,9 @@ func handler(ctx context.Context, b *bot.Bot, update *models.Update) {
 	}
 }
 
-// startWebServer запускает HTTP-сервер с маршрутизацией
 func startWebServer(botToken string) {
 	http.HandleFunc("/", serveIndex)
-	// Обработчик для перехода с нативной кнопки
+	// Обработчик для получения данных от мини-приложения
 	http.HandleFunc("/api/open", func(rw http.ResponseWriter, req *http.Request) {
 		handlerAPIOpen(rw, req, botToken)
 	})
@@ -94,19 +104,25 @@ func startWebServer(botToken string) {
 	log.Fatal(http.ListenAndServe(":"+port, nil))
 }
 
-// serveIndex обслуживает главную страницу index.html
 func serveIndex(w http.ResponseWriter, r *http.Request) {
+	// Отдаем файл index.html
 	http.ServeFile(w, r, "index.html")
 }
 
-// handlerAPIOpen проверяет параметры запроса от миниаппа
 func handlerAPIOpen(rw http.ResponseWriter, req *http.Request, botToken string) {
-	// Валидируем параметры веб-приложения
-	user, ok := bot.ValidateWebappRequest(req.URL.Query(), botToken)
+	// Получаем параметры запроса
+	query := req.URL.Query()
+	// Проводим валидацию с помощью Telegram SDK
+	user, ok := bot.ValidateWebappRequest(query, botToken)
 	if !ok {
 		http.Error(rw, "unauthorized", http.StatusUnauthorized)
+		return
 	}
 
+	fmt.Println("Полученные данные от мини-приложения:")
+	for key, values := range query {
+		fmt.Printf("%s: %v\n", key, values)
+	}
 	log.Printf("Пользователь: %+v", user)
 	rw.Write([]byte("Данные получены!"))
 }

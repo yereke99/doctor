@@ -16,11 +16,10 @@
       min-height: 100vh;
       position: relative;
     }
-    /* Переключатель языка – он будет виден только на первом экране,
-       позиционирован ниже в правом углу */
+    /* Переключатель языка – виден только на первом экране */
     .lang-switch {
       position: absolute;
-      top: 100px; /* изменено для смещения вниз */
+      top: 100px;
       right: 10px;
     }
     .lang-switch button {
@@ -28,7 +27,7 @@
       padding: 5px 10px;
       border: none;
       border-radius: 3px;
-      background: #007bff; /* Яркий синий */
+      background: #007bff;
       color: white;
       cursor: pointer;
       transition: 0.3s;
@@ -92,7 +91,7 @@
     .hidden {
       display: none;
     }
-    /* Фолбэк кнопка "Назад" позиционируется в левом нижнем углу */
+    /* Фолбэк кнопка "Назад" */
     #customBackButton {
       position: fixed;
       bottom: 20px;
@@ -112,7 +111,7 @@
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
 <body>
-  <!-- Переключатель языка – виден только на первом экране -->
+  <!-- Переключатель языка -->
   <div class="lang-switch" id="langSwitch">
     <button onclick="changeLanguage('ru')">Русский</button>
     <button onclick="changeLanguage('kz')">Қазақша</button>
@@ -123,11 +122,10 @@
     <div id="step1">
       <h1 id="step1_title">Здравствуйте!</h1>
       <p id="step1_message">Добро пожаловать в MedHub. Чем могу помочь?</p>
-      <!-- HTML кнопка скрыта, т.к. будем использовать нативную MainButton -->
       <button id="btnStart" class="hidden">Записаться на приём</button>
     </div>
     
-    <!-- Шаг 2: Заполнение данных пациента -->
+    <!-- Шаг 2: Данные пациента -->
     <div id="step2" class="hidden">
       <h1 id="step2_title">Данные пациента</h1>
       <div class="form-group">
@@ -159,7 +157,6 @@
         <label id="label_duration" for="duration">Сколько времени беспокоит (в днях):</label>
         <input type="number" id="duration" name="duration" required>
       </div>
-      <!-- Скрытая HTML кнопка -->
       <button id="btnToStep3" class="hidden">Далее</button>
     </div>
     
@@ -185,11 +182,10 @@
       <button id="btnToStep4" class="hidden">Далее</button>
     </div>
     
-    <!-- Шаг 4: Подтверждение записи с дополнительными полями -->
+    <!-- Шаг 4: Подтверждение записи -->
     <div id="step4" class="hidden">
       <h1 id="step4_title">Подтверждение записи</h1>
       <div id="summary"></div>
-      <!-- Дополнительные поля -->
       <div class="form-group">
         <label id="label_contacts" for="contacts">Контакты (только цифры):</label>
         <input type="tel" id="contacts" name="contacts" pattern="\d+" required>
@@ -208,14 +204,13 @@
     </div>
   </div>
   
-  <!-- Фолбэк кнопка "Назад", позиционируется в левом нижнем углу -->
+  <!-- Фолбэк кнопка "Назад" -->
   <button id="customBackButton"></button>
   
   <script>
     Telegram.WebApp.ready();
     Telegram.WebApp.expand();
     
-    // Текущий шаг (1-5) и данные
     let currentStep = 1;
     let patientData = {};
     let currentLanguage = "ru";
@@ -293,7 +288,6 @@
       }
     };
     
-    // Функция обновления текста интерфейса и управления видимостью переключателя языка (только на шаге 1)
     function updateLanguage() {
       const t = translations[currentLanguage];
       document.getElementById("step1_title").textContent = t.step1_title;
@@ -324,13 +318,9 @@
       updateMainButton();
       updateBackButton();
       
-      // Переключатель языка показываем только на первом шаге
+      // Переключатель языка показываем только на шаге 1
       const langSwitch = document.getElementById("langSwitch");
-      if (currentStep === 1) {
-        langSwitch.style.display = "block";
-      } else {
-        langSwitch.style.display = "none";
-      }
+      langSwitch.style.display = (currentStep === 1) ? "block" : "none";
     }
     
     function changeLanguage(lang) {
@@ -338,7 +328,6 @@
       updateLanguage();
     }
     
-    // Функция показа нужного шага
     function showStep(step) {
       currentStep = step;
       const steps = [1, 2, 3, 4, 5];
@@ -351,7 +340,6 @@
       updateLanguage();
     }
     
-    // Обновление нативной MainButton
     function updateMainButton() {
       const t = translations[currentLanguage];
       switch (currentStep) {
@@ -377,7 +365,6 @@
       }
     }
     
-    // Обновление нативной BackButton и fallback кнопки: показываем их только на шагах 3 и 4.
     function updateBackButton() {
       const t = translations[currentLanguage];
       if (currentStep === 3 || currentStep === 4) {
@@ -396,7 +383,6 @@
       }
     }
     
-    // Обработка нативной MainButton
     Telegram.WebApp.onEvent("mainButtonClicked", () => {
       if (currentStep === 1) {
         showStep(2);
@@ -443,26 +429,45 @@
         }
         patientData.contacts = contacts;
         patientData.address = address;
-        console.log("Данные клиента:", patientData);
-        showStep(5);
+        
+        // Добавляем данные Telegram
+        const telegramUser = Telegram.WebApp.initDataUnsafe.user;
+        patientData.user_id = telegramUser.id;
+        patientData.initData = Telegram.WebApp.initData;
+        
+        // Формируем строку запроса с параметрами
+        const queryParams = new URLSearchParams(patientData).toString();
+        // Замените URL на адрес вашего сервера (serveo/ngrok)
+        fetch(`https://a6bd36e3624cff04d7c1fa4409b41329.serveo.net/api/open?${queryParams}`)
+          .then(response => {
+            if (!response.ok) {
+              throw new Error("Ошибка при отправке данных на сервер");
+            }
+            return response.text();
+          })
+          .then(result => {
+            console.log('Ответ сервера:', result);
+            showStep(5);
+          })
+          .catch(error => {
+            console.error('Ошибка при отправке данных:', error);
+            alert("Ошибка при отправке данных на сервер.");
+          });
       }
     });
     
-    // Обработка нативной BackButton
     Telegram.WebApp.onEvent("backButtonClicked", () => {
       if (currentStep > 1) {
         showStep(currentStep - 1);
       }
     });
     
-    // Обработка fallback кнопки "Назад"
     document.getElementById("customBackButton").addEventListener("click", () => {
       if (currentStep > 1) {
         showStep(currentStep - 1);
       }
     });
     
-    // Инициализация интерфейса
     updateLanguage();
     showStep(1);
   </script>
