@@ -197,10 +197,14 @@
       <button id="btnConfirm" class="hidden">Подтвердить запись</button>
     </div>
     
-    <!-- Шаг 5: Финальное сообщение -->
+    <!-- Шаг 5: Финальное сообщение с ссылкой для перехода к боту -->
     <div id="step5" class="hidden">
       <h1 id="step5_title">Спасибо!</h1>
-      <p id="step5_message">Ваша запись подтверждена. Врач скоро свяжется с вами.</p>
+      <p id="step5_message">
+        Ваша запись подтверждена. Врач скоро свяжется с вами.<br>
+        Для продолжения, перейдите к нашему боту: 
+        <a href="https://t.me/dariger_test_bot" target="_blank">https://t.me/dariger_test_bot</a>
+      </p>
     </div>
   </div>
   
@@ -438,7 +442,7 @@
         // Формируем строку запроса с параметрами
         const queryParams = new URLSearchParams(patientData).toString();
         // Замените URL на адрес вашего сервера (serveo/ngrok)
-        fetch(`https://a6bd36e3624cff04d7c1fa4409b41329.serveo.net/api/open?${queryParams}`)
+        fetch(`https://e6cbd3d861430361efd206cf387abd9c.serveo.net/api/open?${queryParams}`)
           .then(response => {
             if (!response.ok) {
               throw new Error("Ошибка при отправке данных на сервер");
