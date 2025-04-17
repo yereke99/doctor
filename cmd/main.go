@@ -98,9 +98,9 @@ func main() {
 		return
 	}
 
-	// Запускаем веб-сервер с двумя маршрутами:
+	// Запускаем веб-сервер с маршрутами:
 	// /doctor — регистрация врача (POST-форма с файлом)
-	// /api/open — приём заявок от пациентов (GET-запрос с query-параметрами)
+	// /api/open — приём заявок от пациентов (GET/POST-запрос)
 	go startWebServer(cfg.Token, ctx, b)
 	zapLogger.Info("started bot")
 	b.Start(ctx)
@@ -121,7 +121,6 @@ func handler(ctx context.Context, b *bot.Bot, update *models.Update) {
 }
 
 // InlineHandler обрабатывает нажатия inline-кнопок для подтверждения заявки врача.
-// Ожидается, что callback.Data имеет формат "doctor_{id}".
 func InlineHandler(ctx context.Context, b *bot.Bot, callback *models.CallbackQuery) {
 	parts := strings.Split(callback.Data, "_")
 	if len(parts) < 2 {
@@ -179,7 +178,6 @@ func InlineHandlerWrapper(ctx context.Context, b *bot.Bot, update *models.Update
 	InlineHandler(ctx, b, update.CallbackQuery)
 }
 
-// startWebServer регистрирует маршруты и запускает HTTP-сервер.
 func startWebServer(botToken string, ctx context.Context, b *bot.Bot) {
 	// Обработчик для регистрации врача.
 	http.HandleFunc("/doctor", func(w http.ResponseWriter, r *http.Request) {
@@ -194,7 +192,7 @@ func startWebServer(botToken string, ctx context.Context, b *bot.Bot) {
 
 	// Обработчик для заявок от пациентов.
 	http.HandleFunc("/api/open", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodGet {
+		if r.Method == http.MethodPost || r.Method == http.MethodGet {
 			patientAppointmentHandler(w, r, ctx, b)
 		} else {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -218,7 +216,6 @@ func serveDoctor(w http.ResponseWriter, r *http.Request) {
 }
 
 // doctorHandler обрабатывает POST-запрос с данными регистрации врача.
-// Данные сохраняются, файл записывается на диск, и отправляется уведомление администраторам с документом.
 func doctorHandler(w http.ResponseWriter, r *http.Request, ctx context.Context, b *bot.Bot) {
 	if err := r.ParseMultipartForm(32 << 20); err != nil {
 		http.Error(w, "Ошибка парсинга формы: "+err.Error(), http.StatusBadRequest)
@@ -277,10 +274,9 @@ func doctorHandler(w http.ResponseWriter, r *http.Request, ctx context.Context, 
 		FilePath:   filePath,
 	}
 
-	// Сохраняем регистрацию в общей мапе и по специальности.
+	// Сохраняем регистрацию
 	regMu.Lock()
 	registrations[doctorID] = registration
-	// Определяем ключ: если имеется унифицированное название, то используем его.
 	key := doctorType
 	if norm, ok := specialtyMapping[doctorType]; ok {
 		key = norm
@@ -288,13 +284,11 @@ func doctorHandler(w http.ResponseWriter, r *http.Request, ctx context.Context, 
 	doctorsBySpecialty[key] = append(doctorsBySpecialty[key], registration)
 	regMu.Unlock()
 
-	// Формируем текст для администратора с полными данными.
 	caption := fmt.Sprintf(
 		"Регистрация врача:\nФИО: %s\nСпециализация: %s\nСтаж: %s\nДата: %s\nВремя: %s - %s",
 		fullName, doctorType, experience, workDate, startTime, endTime,
 	)
 
-	// Инлайн-клавиатура для подтверждения заявки.
 	inlineKeyboard := models.InlineKeyboardMarkup{
 		InlineKeyboard: [][]models.InlineKeyboardButton{
 			{
@@ -312,7 +306,6 @@ func doctorHandler(w http.ResponseWriter, r *http.Request, ctx context.Context, 
 		return
 	}
 
-	// Отправляем документ администраторам.
 	admins := []int{800703982, 809550522}
 	for _, admin := range admins {
 		fileReader := bytes.NewReader(data)
@@ -332,7 +325,6 @@ func doctorHandler(w http.ResponseWriter, r *http.Request, ctx context.Context, 
 		}
 	}
 
-	// Сообщаем доктору, что заявка отправлена, и даём ссылку для перехода к боту.
 	doctorMsg := fmt.Sprintf(
 		"Ваша заявка отправлена. Перейдите по ссылке для дальнейших инструкций: %s\nОжидайте ответа от модератора.",
 		"https://t.me/dariger_test_bot",
@@ -351,74 +343,166 @@ func doctorHandler(w http.ResponseWriter, r *http.Request, ctx context.Context, 
 	w.Write([]byte("Данные получены и документ отправлен администраторам на подтверждение!"))
 }
 
-// patientAppointmentHandler обрабатывает GET-запросы от пациентов с заявками на приём.
-// Сначала формируется полное сообщение с контактами, которое отправляется глобальным администраторам.
-// Затем, если для выбранной специальности есть зарегистрированные врачи (из doctorsBySpecialty),
-// отправляется уведомление этим врачам (без контактов, адреса и Telegram ID),
-// а специальность выводится в удобочитаемом виде (например, «Кардиолог»).
+// patientAppointmentHandler обрабатывает заявки от пациентов с данными и фото жалобы.
+// Если фото жалобы передано, оно сохраняется в директорию "./patient".
 func patientAppointmentHandler(w http.ResponseWriter, r *http.Request, ctx context.Context, b *bot.Bot) {
-	q := r.URL.Query()
-	fullName := q.Get("full_name")
-	age := q.Get("age")
-	gender := q.Get("gender")
-	complaints := q.Get("complaints")
-	duration := q.Get("duration")
-	specialty := q.Get("specialty")
-	contacts := q.Get("contacts")
-	address := q.Get("address")
+	var (
+		fullName, age, gender, complaints, duration string
+		specialty, contacts, address                string
+		photoData                                   []byte
+		photoFileName                               string
+		err                                         error
+	)
 
-	// Если ФИО пустое, подставляем значение "Не указан".
-	if fullName == "" {
-		fullName = "Не указан"
+	// Поддержка POST (с файлом) и GET (без файла)
+	if r.Method == http.MethodPost {
+		if err = r.ParseMultipartForm(32 << 20); err != nil {
+			http.Error(w, "Ошибка парсинга формы: "+err.Error(), http.StatusBadRequest)
+			return
+		}
+		fullName = r.FormValue("full_name")
+		age = r.FormValue("age")
+		gender = r.FormValue("gender")
+		complaints = r.FormValue("complaints")
+		duration = r.FormValue("duration")
+		specialty = r.FormValue("specialty")
+		contacts = r.FormValue("contacts")
+		address = r.FormValue("address")
+		file, header, err := r.FormFile("complaint_photo")
+		if err == nil { // файл найден
+			defer file.Close()
+			photoData, err = io.ReadAll(file)
+			if err != nil {
+				photoData = nil
+			} else {
+				photoFileName = header.Filename
+			}
+		} else {
+			photoData = nil
+		}
+	} else { // GET-запрос
+		q := r.URL.Query()
+		fullName = q.Get("full_name")
+		age = q.Get("age")
+		gender = q.Get("gender")
+		complaints = q.Get("complaints")
+		duration = q.Get("duration")
+		specialty = q.Get("specialty")
+		contacts = q.Get("contacts")
+		address = q.Get("address")
+		photoData = nil
 	}
 
-	// Приводим специальность к унифицированному виду, если она есть в specialtyMapping.
+	// Сохранение фото жалобы в директорию "./patient" (если файл передан)
+	if photoData != nil {
+		patientDir := "./patient"
+		if err := os.MkdirAll(patientDir, 0755); err != nil {
+			log.Printf("Ошибка создания директории '%s': %v", patientDir, err)
+		} else {
+			fileName := fmt.Sprintf("patient_%d_%s", time.Now().UnixNano(), photoFileName)
+			savePath := filepath.Join(patientDir, fileName)
+			if err := os.WriteFile(savePath, photoData, 0644); err != nil {
+				log.Printf("Ошибка сохранения файла в '%s': %v", patientDir, err)
+			} else {
+				log.Printf("Фото жалобы успешно сохранено: %s", savePath)
+			}
+		}
+	}
+
+	// Приводим специальность к унифицированному виду.
 	if mapped, ok := specialtyMapping[specialty]; ok {
 		specialty = mapped
 	}
-	// Преобразуем специальность обратно для вывода врачу (удобочитаемо).
+	// Получаем удобочитаемый вид специальности.
 	specialtyHuman := specialty
 	if rev, ok := reverseSpecialtyMapping[specialty]; ok {
 		specialtyHuman = rev
 	}
 
-	// Формируем полное сообщение для глобальных администраторов (без Telegram ID).
+	// Формируем два варианта сообщения:
+	// Полное сообщение для администраторов (с контактами и адресом)
 	fullMsgText := fmt.Sprintf(
 		"Новая заявка на приём:\nФИО: %s\nВозраст: %s\nПол: %s\nЖалобы: %s\nДлительность симптомов: %s дней\nСпециальность: %s\nКонтакты: %s\nАдрес: %s",
 		fullName, age, gender, complaints, duration, specialtyHuman, contacts, address,
 	)
+	// Уменьшённое сообщение для врачей и группы (без контактов и адреса)
+	reducedMsgText := fmt.Sprintf(
+		"Новая заявка на приём:\nФИО: %s\nВозраст: %s\nПол: %s\nЖалобы: %s\nДлительность симптомов: %s дней\nСпециальность: %s",
+		fullName, age, gender, complaints, duration, specialtyHuman,
+	)
+
+	// Список администраторов и группа
 	admins := []int{800703982, 809550522}
-	for _, admin := range admins {
-		_, err := b.SendMessage(ctx, &bot.SendMessageParams{
-			ChatID: admin,
-			Text:   fullMsgText,
-		})
-		if err != nil {
-			log.Printf("Ошибка отправки сообщения админу (ID %d): %v", admin, err)
+	var groupID int64 = -1009876543210
+
+	// Функция отправки сообщения (с фото, если оно есть)
+	sendMsg := func(chatID int64, text string) {
+		if photoData != nil {
+			photoUpload := &models.InputFileUpload{
+				Filename: photoFileName,
+				Data:     bytes.NewReader(photoData),
+			}
+			_, err := b.SendPhoto(ctx, &bot.SendPhotoParams{
+				ChatID:  chatID,
+				Photo:   photoUpload,
+				Caption: text,
+			})
+			if err != nil {
+				log.Printf("Ошибка отправки фото в чат (ID %d): %v", chatID, err)
+			}
+		} else {
+			_, err := b.SendMessage(ctx, &bot.SendMessageParams{
+				ChatID: chatID,
+				Text:   text,
+			})
+			if err != nil {
+				log.Printf("Ошибка отправки сообщения в чат (ID %d): %v", chatID, err)
+			}
 		}
 	}
 
-	// Если для выбранной специальности имеются зарегистрированные врачи,
-	// отправляем им уведомление (без контактов, адреса и Telegram ID).
+	// Рассылка заявки администраторам (полное сообщение).
+	for _, admin := range admins {
+		sendMsg(int64(admin), fullMsgText)
+	}
+
+	// Рассылка заявки врачам по выбранной специальности (уменьшённое сообщение).
 	doctors, ok := doctorsBySpecialty[specialty]
 	if ok && len(doctors) > 0 {
-		msgForDoctors := fmt.Sprintf(
-			"Новая заявка на приём:\nФИО: %s\nВозраст: %s\nПол: %s\nЖалобы: %s\nДлительность симптомов: %s дней\nСпециальность: %s",
-			fullName, age, gender, complaints, duration, specialtyHuman,
-		)
 		for _, doc := range doctors {
-			_, err := b.SendMessage(ctx, &bot.SendMessageParams{
-				ChatID: doc.TelegramID,
-				Text:   msgForDoctors,
-			})
-			if err != nil {
-				log.Printf("Ошибка отправки сообщения доктору (ID %d): %v", doc.TelegramID, err)
-			}
+			sendMsg(doc.TelegramID, reducedMsgText)
+		}
+	}
+
+	// Рассылка заявки в группу (уменьшённое сообщение).
+	sendMsg(groupID, reducedMsgText)
+
+	// Рассылка заявки в канал/чат @mediHubDoctors.
+	if photoData != nil {
+		photoUpload := &models.InputFileUpload{
+			Filename: photoFileName,
+			Data:     bytes.NewReader(photoData),
+		}
+		_, err = b.SendPhoto(ctx, &bot.SendPhotoParams{
+			ChatID:  "@mediHubDoctors",
+			Photo:   photoUpload,
+			Caption: fullMsgText,
+		})
+		if err != nil {
+			log.Printf("Ошибка отправки фото в чат @mediHubDoctors: %v", err)
+		}
+	} else {
+		_, err = b.SendMessage(ctx, &bot.SendMessageParams{
+			ChatID: "@mediHubDoctors",
+			Text:   fullMsgText,
+		})
+		if err != nil {
+			log.Printf("Ошибка отправки сообщения в чат @mediHubDoctors: %v", err)
 		}
 	}
 
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte("Данные получены и заявка отправлена администраторам!"))
+	w.Write([]byte("Данные получены и заявка отправлена администраторам (полностью), врачам и группе (без контактов и адреса), а также в @mediHubDoctors!"))
 }

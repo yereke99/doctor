@@ -153,6 +153,11 @@
         <label id="label_complaints" for="complaints">Жалобы (кратко):</label>
         <textarea id="complaints" name="complaints" required></textarea>
       </div>
+      <!-- Новое поле для загрузки фото жалобы -->
+      <div class="form-group">
+        <label id="label_complaint_photo" for="complaint_photo">Фото жалобы (если есть):</label>
+        <input type="file" id="complaint_photo" name="complaint_photo" accept="image/*">
+      </div>
       <div class="form-group">
         <label id="label_duration" for="duration">Сколько времени беспокоит (в днях):</label>
         <input type="number" id="duration" name="duration" required>
@@ -231,6 +236,7 @@
         gender_male: "Муж",
         gender_female: "Жен",
         label_complaints: "Жалобы (кратко):",
+        label_complaint_photo: "Фото жалобы (если есть):",
         label_duration: "Сколько времени беспокоит (в днях):",
         btn_to_step3: "Далее",
         step3_title: "Выберите врача/специальность",
@@ -266,6 +272,7 @@
         gender_male: "Ер",
         gender_female: "Әйел",
         label_complaints: "Шағымдар (қысқа):",
+        label_complaint_photo: "Шағымның фотосы (бар болса):",
         label_duration: "Мәселе қанша күн болды:",
         btn_to_step3: "Келесі",
         step3_title: "Дәрігер/мамандығын таңдаңыз",
@@ -303,6 +310,7 @@
       document.getElementById("gender_male_text").textContent = t.gender_male;
       document.getElementById("gender_female_text").textContent = t.gender_female;
       document.getElementById("label_complaints").textContent = t.label_complaints;
+      document.getElementById("label_complaint_photo").textContent = t.label_complaint_photo;
       document.getElementById("label_duration").textContent = t.label_duration;
       document.getElementById("step3_title").textContent = t.step3_title;
       document.getElementById("label_specialty").textContent = t.label_specialty;
@@ -404,7 +412,7 @@
           alert("Пожалуйста, заполните все поля");
           return;
         }
-        patientData = { fullName, age, gender, complaints, duration };
+        patientData = { full_name: fullName, age: age, gender: gender, complaints: complaints, duration: duration };
         showStep(3);
       } else if (currentStep === 3) {
         const specialty = document.getElementById('specialty').value;
@@ -415,7 +423,7 @@
         patientData.specialty = specialty;
         const t = translations[currentLanguage];
         const summaryText = `
-          <p><strong>${t.label_full_name}</strong> ${patientData.fullName}</p>
+          <p><strong>${t.label_full_name}</strong> ${patientData.full_name}</p>
           <p><strong>${t.label_age}</strong> ${patientData.age}</p>
           <p><strong>${t.label_gender}</strong> ${patientData.gender}</p>
           <p><strong>${t.label_complaints}</strong> ${patientData.complaints}</p>
@@ -439,10 +447,22 @@
         patientData.user_id = telegramUser.id;
         patientData.initData = Telegram.WebApp.initData;
         
-        // Формируем строку запроса с параметрами
-        const queryParams = new URLSearchParams(patientData).toString();
-        // Замените URL на адрес вашего сервера (serveo/ngrok)
-        fetch(`https://e6cbd3d861430361efd206cf387abd9c.serveo.net/api/open?${queryParams}`)
+        // Используем FormData для отправки текстовых данных и файла (если выбран)
+        const formData = new FormData();
+        for (let key in patientData) {
+          formData.append(key, patientData[key]);
+        }
+        formData.append("contacts", contacts);
+        formData.append("address", address);
+        const fileInput = document.getElementById("complaint_photo");
+        if (fileInput && fileInput.files.length > 0) {
+          formData.append("complaint_photo", fileInput.files[0]);
+        }
+        
+        fetch(`https://5f18fa0bb0a075dbdf2a8cc45ed9ddc1.serveo.net/api/open`, {
+          method: 'POST',
+          body: formData
+        })
           .then(response => {
             if (!response.ok) {
               throw new Error("Ошибка при отправке данных на сервер");
