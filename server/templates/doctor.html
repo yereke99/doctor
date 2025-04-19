@@ -5,266 +5,249 @@
   <title>Регистрация врача</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <style>
+    :root {
+      --main-bg: #f0f2f5;
+      --accent: #007bff;
+      --accent-light: #28a745;
+      --card-bg: #fff;
+      --text-dark: #333;
+      --radius: 8px;
+      --pad: 20px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
-      background: linear-gradient(135deg, #f0f2f5, #dbeafe);
       font-family: Arial, sans-serif;
-      margin: 0;
-      padding: 20px;
-      display: flex;
-      justify-content: center;
-      align-items: center;
+      background: linear-gradient(135deg, var(--main-bg), #dbeafe);
+      color: var(--text-dark);
       min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: var(--pad);
       position: relative;
     }
-    /* Один блок переключения языка в правом верхнем углу – позиция изменена на ещё ниже */
     .lang-switch {
       position: absolute;
-      top: 100px; /* изменено с 80px на 100px */
-      right: 10px;
+      top: 20px;
+      right: 20px;
     }
     .lang-switch button {
-      margin-left: 5px;
-      padding: 5px 10px;
-      border: none;
-      border-radius: 3px;
-      background: #007bff;
+      background: var(--accent);
       color: #fff;
+      border: none;
+      border-radius: var(--radius);
+      padding: 6px 12px;
+      margin-left: 5px;
       cursor: pointer;
-      transition: 0.3s;
-      font-weight: bold;
+      transition: opacity .2s;
     }
-    .lang-switch button:hover {
-      opacity: 0.9;
-    }
-    .container {
-      background: #fff;
-      padding: 30px;
-      border-radius: 10px;
-      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
-      max-width: 600px;
+    .lang-switch button:hover { opacity: .8; }
+
+    .page {
+      display: none;
       width: 100%;
-    }
-    h1, p, label {
+      max-width: 480px;
+      background: var(--card-bg);
+      border-radius: var(--radius);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+      padding: var(--pad);
       text-align: center;
     }
-    .form-group {
-      margin-bottom: 15px;
-      text-align: left;
+    .page.active { display: block; }
+
+    h1 {
+      margin-bottom: var(--pad);
+      font-size: 1.5em;
     }
+
+    .btn, .nav-btn {
+      display: inline-block;
+      border: none;
+      border-radius: var(--radius);
+      padding: 12px 24px;
+      font-size: 1em;
+      cursor: pointer;
+      transition: background .2s;
+      margin-top: 10px;
+    }
+    .btn {
+      background: var(--accent-light);
+      color: #fff;
+    }
+    .btn:hover { background: #1e7e34; }
+    .nav-btn {
+      background: #ccc;
+      color: #333;
+      margin: 0 10px;
+    }
+    .nav-btn:hover { background: #bbb; }
+
+    form { text-align: left; }
+    .form-group { margin-bottom: var(--pad); }
     label {
-      font-weight: bold;
-      color: #444;
-      margin-bottom: 5px;
       display: block;
+      margin-bottom: 5px;
+      font-weight: bold;
     }
     input[type="text"],
-    input[type="number"],
-    input[type="time"],
-    input[type="date"],
-    input[type="file"],
-    select {
+    input[type="tel"],
+    input[type="file"] {
       width: 100%;
       padding: 10px;
+      font-size: 1em;
       border: 1px solid #ddd;
-      border-radius: 5px;
-      font-size: 16px;
-      box-sizing: border-box;
+      border-radius: var(--radius);
     }
-    .hidden {
-      display: none;
+
+    #previewContent p {
+      margin-bottom: 10px;
+      text-align: left;
+    }
+    #previewContent img {
+      display: block;
+      max-width: 120px;
+      margin-top: 5px;
+      border-radius: var(--radius);
     }
   </style>
-  <!-- Подключение Telegram Web Apps SDK -->
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
 <body>
-  <!-- Переключатель языка (единственный блок) -->
+
   <div class="lang-switch">
-    <button onclick="changeLanguage('ru')">Русский</button>
-    <button onclick="changeLanguage('kz')">Қазақша</button>
+    <button onclick="setLang('ru')">RU</button>
+    <button onclick="setLang('kz')">KZ</button>
   </div>
-  
-  <div class="container">
-    <!-- Шаг 1: Приветствие -->
-    <div id="step1">
-      <h1 id="greetTitle">Здравствуйте!</h1>
-      <p id="greetMessage">Добро пожаловать на регистрацию врача.</p>
-      <!-- Кнопка для перехода к форме регистрации -->
-      <button id="btnStart"></button>
-    </div>
-    
-    <!-- Шаг 2: Форма регистрации врача (без кнопки submit) -->
-    <div id="step2" class="hidden">
-      <h1 id="regTitle"></h1>
-      <!-- Форма не содержит HTML-кнопку submit – отправка производится нативной кнопкой Telegram -->
-      <form id="doctorForm" enctype="multipart/form-data">
-        <div class="form-group">
-          <label for="full_name"></label>
-          <input type="text" id="full_name" name="full_name" placeholder="Введите ФИО" required>
-        </div>
-        <div class="form-group">
-          <label for="doctor_type"></label>
-          <!-- Обновлённый список специальностей (согласно примеру) -->
-          <select id="doctor_type" name="doctor_type" required>
-            <option value="">Выберите специализацию</option>
-            <option value="Терапевт">Терапевт</option>
-            <option value="Хирург">Хирург</option>
-            <option value="Кардиолог">Кардиолог</option>
-            <option value="Невролог">Невролог</option>
-            <option value="ЛОР">ЛОР</option>
-            <option value="Психолог">Психолог</option>
-            <option value="Врач на дому">Врач на дому</option>
-            <option value="Медсестра на дому">Медсестра на дому</option>
-            <option value="Анализ">Анализ</option>
-            <option value="Капельница к медперсоналу">Капельница к медперсоналу</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label for="experience"></label>
-          <input type="number" id="experience" name="experience" placeholder="Введите стаж" required>
-        </div>
-        <div class="form-group">
-          <label for="document"></label>
-          <input type="file" id="document" name="document" accept=".pdf, .jpg, .png" required>
-        </div>
-        <div class="form-group">
-          <label for="work_date"></label>
-          <input type="date" id="work_date" name="work_date" required>
-        </div>
-        <div class="form-group">
-          <label for="start_time"></label>
-          <input type="time" id="start_time" name="start_time" required>
-        </div>
-        <div class="form-group">
-          <label for="end_time"></label>
-          <input type="time" id="end_time" name="end_time" required>
-        </div>
-        <!-- Добавляем скрытое поле для Telegram ID -->
-        <input type="hidden" id="telegram_id" name="telegram_id">
-      </form>
+
+  <!-- Шаг 1: Welcome -->
+  <div id="step1" class="page active">
+    <h1>Добро пожаловать на регистрацию врача!</h1>
+    <button id="toForm" class="btn">Регистрация</button>
+  </div>
+
+  <!-- Шаг 2: Форма -->
+  <div id="step2" class="page">
+    <h1>Регистрация врача</h1>
+    <form id="doctorForm" enctype="multipart/form-data">
+      <div class="form-group">
+        <label for="full_name">ФИО</label>
+        <input type="text" id="full_name" name="full_name" required>
+      </div>
+      <div class="form-group">
+        <label for="avatar">Фото (аватарка)</label>
+        <input type="file" id="avatar" name="avatar" accept="image/*" required>
+      </div>
+      <div class="form-group">
+        <label for="diploma">Диплом</label>
+        <input type="file" id="diploma" name="diploma" accept=".pdf,.jpg,.png" required>
+      </div>
+      <div class="form-group">
+        <label for="certificate">Сертификат</label>
+        <input type="file" id="certificate" name="certificate" accept=".pdf,.jpg,.png" required>
+      </div>
+      <div class="form-group">
+        <label for="contact">Контактный номер</label>
+        <input type="tel" id="contact" name="contact" placeholder="+7 (___) ___-__-__" required>
+      </div>
+      <input type="hidden" name="telegram_id" id="telegram_id">
+      <div style="text-align:center;">
+        <button type="button" id="back1" class="nav-btn">Назад</button>
+      </div>
+    </form>
+  </div>
+
+  <!-- Шаг 3: Превью -->
+  <div id="step3" class="page">
+    <h1>Проверьте введённые данные</h1>
+    <div id="previewContent"></div>
+    <div style="text-align:center;">
+      <button type="button" id="back2" class="nav-btn">Назад</button>
     </div>
   </div>
 
   <script>
-    // Инициализация Telegram WebApp
     Telegram.WebApp.ready();
 
-    // Записываем Telegram ID в скрытое поле (если доступен)
-    if (Telegram.WebApp.initDataUnsafe && Telegram.WebApp.initDataUnsafe.user) {
-      document.getElementById("telegram_id").value = Telegram.WebApp.initDataUnsafe.user.id;
+    // Получаем user и заполняем hidden telegram_id
+    const user = Telegram.WebApp.initDataUnsafe?.user;
+    if (user) {
+      document.getElementById('telegram_id').value = user.id;
     }
 
-    // Переводы для русского и казахского языков
-    const translations = {
-      ru: {
-        greetTitle: "Здравствуйте!",
-        greetMessage: "Добро пожаловать на регистрацию врача.",
-        btnStart: "Начать регистрацию",
-        regTitle: "Регистрация врача",
-        labelFullName: "ФИО:",
-        labelDoctorType: "Специализация:",
-        labelExperience: "Стаж (в годах):",
-        labelDocument: "Документ, подтверждающий квалификацию:",
-        labelWorkDate: "Рабочая дата:",
-        labelStartTime: "Начало рабочего времени:",
-        labelEndTime: "Окончание рабочего времени:",
-        btnSubmit: "Зарегистрироваться"
-      },
-      kz: {
-        greetTitle: "Сәлеметсіз бе!",
-        greetMessage: "Дәрігерді тіркеуге қош келдіңіз.",
-        btnStart: "Тіркеуді бастау",
-        regTitle: "Дәрігер тіркеу",
-        labelFullName: "Аты-жөні:",
-        labelDoctorType: "Мамандығы:",
-        labelExperience: "Жұмыс тәжірибесі (жыл):",
-        labelDocument: "Біліктілігін растайтын құжат:",
-        labelWorkDate: "Жұмыс күні:",
-        labelStartTime: "Жұмыс басталуы:",
-        labelEndTime: "Жұмыс аяқталуы:",
-        btnSubmit: "Тіркеу"
+    let currentStep = 1;
+    function show(step) {
+      currentStep = step;
+      [1,2,3].forEach(i => {
+        document.getElementById('step'+i)
+          .classList.toggle('active', i===step);
+      });
+      Telegram.WebApp.MainButton.hide();
+      if (step === 2) {
+        Telegram.WebApp.MainButton.setText('Проверить данные');
+        Telegram.WebApp.MainButton.show();
       }
-    };
-
-    let currentLanguage = "ru";
-
-    function updateLanguage() {
-      const t = translations[currentLanguage];
-      // Обновляем текст приветствия
-      document.getElementById("greetTitle").textContent = t.greetTitle;
-      document.getElementById("greetMessage").textContent = t.greetMessage;
-      document.getElementById("btnStart").textContent = t.btnStart;
-      // Обновляем текст формы регистрации
-      document.getElementById("regTitle").textContent = t.regTitle;
-      document.querySelector("label[for='full_name']").textContent = t.labelFullName;
-      document.querySelector("label[for='doctor_type']").textContent = t.labelDoctorType;
-      document.querySelector("label[for='experience']").textContent = t.labelExperience;
-      document.querySelector("label[for='document']").textContent = t.labelDocument;
-      document.querySelector("label[for='work_date']").textContent = t.labelWorkDate;
-      document.querySelector("label[for='start_time']").textContent = t.labelStartTime;
-      document.querySelector("label[for='end_time']").textContent = t.labelEndTime;
-      
-      // Если отображается форма регистрации, обновляем текст нативной кнопки
-      if (!document.getElementById("step2").classList.contains("hidden")) {
-        Telegram.WebApp.MainButton.setText(t.btnSubmit);
-      }
-    }
-
-    function changeLanguage(lang) {
-      currentLanguage = lang;
-      updateLanguage();
-    }
-
-    // Функция для переключения между шагами
-    function showStep(step) {
-      if (step === 1) {
-        document.getElementById("step1").classList.remove("hidden");
-        document.getElementById("step2").classList.add("hidden");
-        Telegram.WebApp.MainButton.hide();
-      } else if (step === 2) {
-        document.getElementById("step1").classList.add("hidden");
-        document.getElementById("step2").classList.remove("hidden");
-        const t = translations[currentLanguage];
-        Telegram.WebApp.MainButton.setText(t.btnSubmit);
+      if (step === 3) {
+        Telegram.WebApp.MainButton.setText('Зарегистрироваться');
         Telegram.WebApp.MainButton.show();
       }
     }
 
-    document.getElementById("btnStart").addEventListener("click", function() {
-      showStep(2);
-    });
+    document.getElementById('toForm').onclick = () => show(2);
+    document.getElementById('back1').onclick  = () => show(1);
+    document.getElementById('back2').onclick  = () => show(2);
 
-    Telegram.WebApp.onEvent("mainButtonClicked", function() {
-      const form = document.getElementById("doctorForm");
-      const formData = new FormData(form);
-
-      if (!form.checkValidity()) {
-        alert("Пожалуйста, заполните все поля");
-        return;
-      }
-
-      fetch("https://5f18fa0bb0a075dbdf2a8cc45ed9ddc1.serveo.net/doctor", {
-        method: "POST",
-        body: formData
-      })
-      .then(response => {
-        if (!response.ok) {
-          throw new Error("Ошибка при отправке данных на сервер");
+    function buildPreview() {
+      const f = document.getElementById('doctorForm');
+      if (!f.checkValidity()) { f.reportValidity(); return false; }
+      const data = new FormData(f);
+      let html = `<p><strong>ФИО:</strong> ${data.get('full_name')}</p>`;
+      ['avatar','diploma','certificate'].forEach(field => {
+        const file = data.get(field);
+        if (file && file.name) {
+          html += `<p><strong>${field.charAt(0).toUpperCase()+field.slice(1)}:</strong> ${file.name}`;
+          if (field === 'avatar') {
+            const url = URL.createObjectURL(file);
+            html += `<br><img src="${url}" alt="avatar">`;
+          }
+          html += `</p>`;
         }
-        return response.text();
-      })
-      .then(result => {
-        console.log("Ответ сервера:", result);
-        alert("Регистрация успешна!");
-      })
-      .catch(error => {
-        console.error("Ошибка при отправке данных:", error);
-        alert("Ошибка при отправке данных на сервер.");
       });
+      html += `<p><strong>Контакт:</strong> ${data.get('contact')}</p>`;
+      document.getElementById('previewContent').innerHTML = html;
+      return true;
+    }
+
+    Telegram.WebApp.onEvent('mainButtonClicked', () => {
+      if (currentStep === 2) {
+        if (buildPreview()) show(3);
+      } else if (currentStep === 3) {
+        const fd = new FormData(document.getElementById('doctorForm'));
+        fetch("https://8e5603a614e7bf76bb8157e1c83f060c.serveo.net/doctor", {
+          method: "POST",
+          mode: "cors",
+          body: fd
+        })
+        .then(async res => {
+          const text = await res.text();
+          if (!res.ok) {
+            alert(`Ошибка ${res.status}: ${text}`);
+            throw new Error(text);
+          }
+          // при успехе закрываем WebApp
+          Telegram.WebApp.close();
+        })
+        .catch(err => console.error("Fetch error:", err));
+      }
     });
 
-    updateLanguage();
-    showStep(1);
+    // Инициализация
+    show(1);
+
+    function setLang(lang) {
+      // TODO: добавить переводы
+      console.log("Language switched to", lang);
+    }
   </script>
+
 </body>
 </html>

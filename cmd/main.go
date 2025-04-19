@@ -19,20 +19,19 @@ import (
 
 	"github.com/go-telegram/bot"
 	"github.com/go-telegram/bot/models"
+	"github.com/go-telegram/ui/slider"
 	"go.uber.org/zap"
 )
 
-// DoctorRegistration хранит данные регистрации врача.
+// Обновлённая структура регистрации
 type DoctorRegistration struct {
-	ID         int64
-	FullName   string
-	DoctorType string
-	Experience string
-	WorkDate   string
-	StartTime  string
-	EndTime    string
-	TelegramID int64  // Telegram ID доктора (передаётся из формы)
-	FilePath   string // Путь сохранённого файла
+	ID          int64
+	FullName    string
+	Contact     string
+	TelegramID  int64
+	AvatarPath  string // будет сохраняться в ./ava
+	DiplomaPath string // в ./documents
+	CertPath    string // в ./documents
 }
 
 var (
@@ -181,12 +180,19 @@ func InlineHandlerWrapper(ctx context.Context, b *bot.Bot, update *models.Update
 func startWebServer(botToken string, ctx context.Context, b *bot.Bot) {
 	// Обработчик для регистрации врача.
 	http.HandleFunc("/doctor", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodGet {
-			serveDoctor(w, r)
-		} else if r.Method == http.MethodPost {
+		// CORS-preflight
+		if r.Method == http.MethodOptions {
+			w.Header().Set("Access-Control-Allow-Origin", "*")
+			w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+
+		if r.Method == http.MethodPost {
 			doctorHandler(w, r, ctx, b)
 		} else {
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			http.Error(w, "Метод не разрешён", http.StatusMethodNotAllowed)
 		}
 	})
 
@@ -215,19 +221,26 @@ func serveDoctor(w http.ResponseWriter, r *http.Request) {
 	http.ServeFile(w, r, "doctor.html")
 }
 
-// doctorHandler обрабатывает POST-запрос с данными регистрации врача.
+// Обработчик /doctor POST с использованием slider для отправки трёх файлов
 func doctorHandler(w http.ResponseWriter, r *http.Request, ctx context.Context, b *bot.Bot) {
+	// CORS‑preflight
+	if r.Method == http.MethodOptions {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+
 	if err := r.ParseMultipartForm(32 << 20); err != nil {
 		http.Error(w, "Ошибка парсинга формы: "+err.Error(), http.StatusBadRequest)
 		return
 	}
 
 	fullName := r.FormValue("full_name")
-	doctorType := r.FormValue("doctor_type")
-	experience := r.FormValue("experience")
-	workDate := r.FormValue("work_date")
-	startTime := r.FormValue("start_time")
-	endTime := r.FormValue("end_time")
+	contact := r.FormValue("contact")
 	telegramIDStr := r.FormValue("telegram_id")
 	telegramID, err := strconv.ParseInt(telegramIDStr, 10, 64)
 	if err != nil {
@@ -235,112 +248,108 @@ func doctorHandler(w http.ResponseWriter, r *http.Request, ctx context.Context, 
 		return
 	}
 
-	file, header, err := r.FormFile("document")
+	avaDir := "./ava"
+	docsDir := "./documents"
+	os.MkdirAll(avaDir, 0755)
+	os.MkdirAll(docsDir, 0755)
+
+	saveFile := func(field, dst string) (string, error) {
+		file, hdr, err := r.FormFile(field)
+		if err != nil {
+			return "", err
+		}
+		defer file.Close()
+		name := fmt.Sprintf("%d_%s", time.Now().UnixNano(), hdr.Filename)
+		path := filepath.Join(dst, name)
+		out, err := os.Create(path)
+		if err != nil {
+			return "", err
+		}
+		defer out.Close()
+		if _, err := io.Copy(out, file); err != nil {
+			return "", err
+		}
+		return path, nil
+	}
+
+	avatarPath, err := saveFile("avatar", avaDir)
 	if err != nil {
-		http.Error(w, "Ошибка получения файла: "+err.Error(), http.StatusBadRequest)
+		http.Error(w, "Ошибка сохранения аватарки: "+err.Error(), http.StatusBadRequest)
 		return
 	}
-	defer file.Close()
-
-	docDir := "./documents"
-	if err := os.MkdirAll(docDir, 0755); err != nil {
-		http.Error(w, "Ошибка создания директории: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	filePath := filepath.Join(docDir, header.Filename)
-	dst, err := os.Create(filePath)
+	diplomaPath, err := saveFile("diploma", docsDir)
 	if err != nil {
-		http.Error(w, "Ошибка создания файла: "+err.Error(), http.StatusInternalServerError)
+		http.Error(w, "Ошибка сохранения диплома: "+err.Error(), http.StatusBadRequest)
 		return
 	}
-	defer dst.Close()
-
-	if _, err := io.Copy(dst, file); err != nil {
-		http.Error(w, "Ошибка сохранения файла: "+err.Error(), http.StatusInternalServerError)
+	certPath, err := saveFile("certificate", docsDir)
+	if err != nil {
+		http.Error(w, "Ошибка сохранения сертификата: "+err.Error(), http.StatusBadRequest)
 		return
 	}
 
 	doctorID := time.Now().Unix()
-	registration := DoctorRegistration{
-		ID:         doctorID,
-		FullName:   fullName,
-		DoctorType: doctorType,
-		Experience: experience,
-		WorkDate:   workDate,
-		StartTime:  startTime,
-		EndTime:    endTime,
-		TelegramID: telegramID,
-		FilePath:   filePath,
+	reg := DoctorRegistration{
+		ID:          doctorID,
+		FullName:    fullName,
+		Contact:     contact,
+		TelegramID:  telegramID,
+		AvatarPath:  avatarPath,
+		DiplomaPath: diplomaPath,
+		CertPath:    certPath,
 	}
-
-	// Сохраняем регистрацию
 	regMu.Lock()
-	registrations[doctorID] = registration
-	key := doctorType
-	if norm, ok := specialtyMapping[doctorType]; ok {
-		key = norm
-	}
-	doctorsBySpecialty[key] = append(doctorsBySpecialty[key], registration)
+	registrations[doctorID] = reg
 	regMu.Unlock()
 
-	caption := fmt.Sprintf(
-		"Регистрация врача:\nФИО: %s\nСпециализация: %s\nСтаж: %s\nДата: %s\nВремя: %s - %s",
-		fullName, doctorType, experience, workDate, startTime, endTime,
-	)
-
-	inlineKeyboard := models.InlineKeyboardMarkup{
-		InlineKeyboard: [][]models.InlineKeyboardButton{
-			{
-				{
-					Text:         "Подтвердить",
-					CallbackData: fmt.Sprintf("doctor_%d", doctorID),
-				},
-			},
-		},
+	// Формируем слайды: аватар, диплом, сертификат
+	files := []struct{ Label, Path string }{
+		{"Аватарка", reg.AvatarPath},
+		{"Диплом", reg.DiplomaPath},
+		{"Сертификат", reg.CertPath},
 	}
-
-	data, err := os.ReadFile(filePath)
-	if err != nil {
-		http.Error(w, "Ошибка чтения файла: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	admins := []int{800703982, 809550522}
-	for _, admin := range admins {
-		fileReader := bytes.NewReader(data)
-		adminDoc := &bot.SendDocumentParams{
-			ChatID: admin,
-			Document: &models.InputFileUpload{
-				Filename: filepath.Base(filePath),
-				Data:     fileReader,
-			},
-			Caption:     caption,
-			ParseMode:   "HTML",
-			ReplyMarkup: inlineKeyboard,
-		}
-		_, err := b.SendDocument(ctx, adminDoc)
+	slides := make([]slider.Slide, 0, len(files))
+	for _, f := range files {
+		data, err := os.ReadFile(f.Path)
 		if err != nil {
-			log.Printf("Ошибка отправки документа админу (ID %d): %v", admin, err)
+			log.Printf("Ошибка чтения файла %s: %v", f.Path, err)
+			continue
+		}
+		slides = append(slides, slider.Slide{
+			Text:     f.Label,
+			Photo:    string(data),
+			IsUpload: true,
+		})
+	}
+
+	// Callback при нажатии «Подтвердить»
+	onSelect := func(ctx context.Context, b *bot.Bot, msg models.MaybeInaccessibleMessage, idx int) {
+		if msg.Message != nil {
+			b.SendMessage(ctx, &bot.SendMessageParams{
+				ChatID: msg.Message.Chat.ID,
+				Text:   fmt.Sprintf("Регистрация врача %s подтверждена ✅", reg.FullName),
+			})
 		}
 	}
 
-	doctorMsg := fmt.Sprintf(
-		"Ваша заявка отправлена. Перейдите по ссылке для дальнейших инструкций: %s\nОжидайте ответа от модератора.",
-		"https://t.me/dariger_test_bot",
-	)
-	_, err = b.SendMessage(ctx, &bot.SendMessageParams{
-		ChatID: registration.TelegramID,
-		Text:   doctorMsg,
-	})
-	if err != nil {
-		log.Printf("Ошибка отправки сообщения доктору: %v", err)
+	opts := []slider.Option{
+		slider.OnSelect("✅ Подтвердить", true, onSelect),
 	}
 
-	w.Header().Set("Access-Control-Allow-Origin", "*")
-	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	admins := []int64{800703982, 809550522}
+	for _, adminID := range admins {
+		sl := slider.New(b, slides, opts...)
+		sl.Show(ctx, b, adminID)
+	}
+
+	// Уведомляем самого врача
+	_, _ = b.SendMessage(ctx, &bot.SendMessageParams{
+		ChatID: reg.TelegramID,
+		Text:   "Ваша заявка отправлена на рассмотрение. Ожидайте подтверждения.",
+	})
+
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte("Данные получены и документ отправлен администраторам на подтверждение!"))
+	w.Write([]byte("Регистрация принята и файлы сохранены."))
 }
 
 // patientAppointmentHandler обрабатывает заявки от пациентов с данными и фото жалобы.
