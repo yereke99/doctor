@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"doctor/config"
+	"doctor/traits/database"
 	"doctor/traits/logger"
 	"fmt"
 	"io"
@@ -82,6 +83,8 @@ func main() {
 		zapLogger.Error("error init config", zap.Error(err))
 		return
 	}
+
+	_ = database.DatabaseConnection(cfg)
 
 	// Регистрируем стандартный хендлер и обработчики inline callback
 	opts := []bot.Option{

@@ -2,9 +2,9 @@ package database
 
 import (
 	"database/sql"
+	"doctor/config"
 	"fmt"
 	"log"
-	"tanysu-bot/config"
 
 	_ "github.com/mattn/go-sqlite3"
 )
@@ -31,7 +31,7 @@ func DatabaseConnection(cfg *config.Config) *sql.DB {
 
 	// Создаём таблицу doktok, если она не существует
 	createDoktok := `
-CREATE TABLE IF NOT EXISTS doktok (
+CREATE TABLE IF NOT EXISTS doktor (
 	id INTEGER PRIMARY KEY AUTOINCREMENT,
 	id_user BIGINT,
 	ava TEXT,
