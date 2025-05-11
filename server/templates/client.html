@@ -16,7 +16,6 @@
       min-height: 100vh;
       position: relative;
     }
-    /* Переключатель языка – виден только на первом экране */
     .lang-switch {
       position: absolute;
       top: 100px;
@@ -44,7 +43,6 @@
       max-width: 600px;
       width: 100%;
     }
-    /* Для мобильных устройств делаем контейнер скроллируемым */
     @media (max-width: 600px) {
       .container {
         max-height: calc(100vh - 40px);
@@ -91,7 +89,6 @@
     .hidden {
       display: none;
     }
-    /* Фолбэк кнопка "Назад" */
     #customBackButton {
       position: fixed;
       bottom: 20px;
@@ -107,70 +104,56 @@
       display: none;
     }
   </style>
-  <!-- Telegram Web Apps SDK -->
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
 <body>
-  <!-- Переключатель языка -->
   <div class="lang-switch" id="langSwitch">
     <button onclick="changeLanguage('ru')">Русский</button>
     <button onclick="changeLanguage('kz')">Қазақша</button>
   </div>
   
   <div class="container">
-    <!-- Шаг 1: Приветствие -->
     <div id="step1">
       <h1 id="step1_title">Здравствуйте!</h1>
       <p id="step1_message">Добро пожаловать в MedHub. Чем могу помочь?</p>
-      <button id="btnStart" class="hidden">Записаться на приём</button>
     </div>
     
-    <!-- Шаг 2: Данные пациента -->
     <div id="step2" class="hidden">
       <h1 id="step2_title">Данные пациента</h1>
       <div class="form-group">
         <label id="label_full_name" for="full_name">ФИО:</label>
-        <input type="text" id="full_name" name="full_name" required>
+        <input type="text" id="full_name" required>
       </div>
       <div class="form-group">
         <label id="label_gender" for="gender">Пол:</label>
         <div class="radio-group">
-          <label>
-            <input type="radio" name="gender" value="Муж" required>
-            <span id="gender_male_text">Муж</span>
-          </label>
-          <label>
-            <input type="radio" name="gender" value="Жен" required>
-            <span id="gender_female_text">Жен</span>
-          </label>
+          <label><input type="radio" name="gender" value="Муж" required> <span id="gender_male_text">Муж</span></label>
+          <label><input type="radio" name="gender" value="Жен" required> <span id="gender_female_text">Жен</span></label>
         </div>
       </div>
       <div class="form-group">
         <label id="label_age" for="age">Возраст:</label>
-        <input type="number" id="age" name="age" required>
+        <input type="number" id="age" required>
       </div>
       <div class="form-group">
         <label id="label_complaints" for="complaints">Жалобы (кратко):</label>
-        <textarea id="complaints" name="complaints" required></textarea>
+        <textarea id="complaints" required></textarea>
       </div>
-      <!-- Новое поле для загрузки фото жалобы -->
       <div class="form-group">
         <label id="label_complaint_photo" for="complaint_photo">Фото жалобы (если есть):</label>
-        <input type="file" id="complaint_photo" name="complaint_photo" accept="image/*">
+        <input type="file" id="complaint_photo" accept="image/*">
       </div>
       <div class="form-group">
         <label id="label_duration" for="duration">Сколько времени беспокоит (в днях):</label>
-        <input type="number" id="duration" name="duration" required>
+        <input type="number" id="duration" required>
       </div>
-      <button id="btnToStep3" class="hidden">Далее</button>
     </div>
     
-    <!-- Шаг 3: Выбор врача/специальности -->
     <div id="step3" class="hidden">
       <h1 id="step3_title">Выберите врача/специальность</h1>
       <div class="form-group">
         <label id="label_specialty" for="specialty">Специальность:</label>
-        <select id="specialty" name="specialty" required>
+        <select id="specialty" required>
           <option value="" id="option_specialty_default">Выберите специальность</option>
           <option value="Терапевт" id="option_therapist">Терапевт</option>
           <option value="Хирург" id="option_surgeon">Хирург</option>
@@ -184,25 +167,21 @@
           <option value="Капельница к медперсоналу" id="option_iv_drip">Капельница к медперсоналу</option>
         </select>
       </div>
-      <button id="btnToStep4" class="hidden">Далее</button>
     </div>
     
-    <!-- Шаг 4: Подтверждение записи -->
     <div id="step4" class="hidden">
       <h1 id="step4_title">Подтверждение записи</h1>
       <div id="summary"></div>
       <div class="form-group">
         <label id="label_contacts" for="contacts">Контакты (только цифры):</label>
-        <input type="tel" id="contacts" name="contacts" pattern="\d+" required>
+        <input type="tel" id="contacts" pattern="\d+" required>
       </div>
       <div class="form-group">
         <label id="label_address" for="address">Адрес:</label>
-        <input type="text" id="address" name="address" required>
+        <input type="text" id="address" required>
       </div>
-      <button id="btnConfirm" class="hidden">Подтвердить запись</button>
     </div>
     
-    <!-- Шаг 5: Финальное сообщение с ссылкой для перехода к боту -->
     <div id="step5" class="hidden">
       <h1 id="step5_title">Спасибо!</h1>
       <p id="step5_message">
@@ -213,7 +192,6 @@
     </div>
   </div>
   
-  <!-- Фолбэк кнопка "Назад" -->
   <button id="customBackButton"></button>
   
   <script>
@@ -329,10 +307,7 @@
       document.getElementById("label_address").textContent = t.label_address;
       updateMainButton();
       updateBackButton();
-      
-      // Переключатель языка показываем только на шаге 1
-      const langSwitch = document.getElementById("langSwitch");
-      langSwitch.style.display = (currentStep === 1) ? "block" : "none";
+      document.getElementById("langSwitch").style.display = (currentStep === 1 ? "block" : "none");
     }
     
     function changeLanguage(lang) {
@@ -342,11 +317,10 @@
     
     function showStep(step) {
       currentStep = step;
-      const steps = [1, 2, 3, 4, 5];
-      steps.forEach(s => {
-        document.getElementById("step" + s).classList.add("hidden");
+      [1,2,3,4,5].forEach(s => {
+        document.getElementById("step"+s).classList.add("hidden");
       });
-      document.getElementById("step" + step).classList.remove("hidden");
+      document.getElementById("step"+step).classList.remove("hidden");
       updateMainButton();
       updateBackButton();
       updateLanguage();
@@ -354,44 +328,33 @@
     
     function updateMainButton() {
       const t = translations[currentLanguage];
-      switch (currentStep) {
+      switch(currentStep) {
         case 1:
-          Telegram.WebApp.MainButton.setText(t.btn_start);
-          Telegram.WebApp.MainButton.show();
-          break;
+          Telegram.WebApp.MainButton.setText(t.btn_start); Telegram.WebApp.MainButton.show(); break;
         case 2:
-          Telegram.WebApp.MainButton.setText(t.btn_to_step3);
-          Telegram.WebApp.MainButton.show();
-          break;
+          Telegram.WebApp.MainButton.setText(t.btn_to_step3); Telegram.WebApp.MainButton.show(); break;
         case 3:
-          Telegram.WebApp.MainButton.setText(t.btn_to_step4);
-          Telegram.WebApp.MainButton.show();
-          break;
+          Telegram.WebApp.MainButton.setText(t.btn_to_step4); Telegram.WebApp.MainButton.show(); break;
         case 4:
-          Telegram.WebApp.MainButton.setText(t.btn_confirm);
-          Telegram.WebApp.MainButton.show();
-          break;
-        case 5:
+          Telegram.WebApp.MainButton.setText(t.btn_confirm); Telegram.WebApp.MainButton.show(); break;
+        default:
           Telegram.WebApp.MainButton.hide();
-          break;
       }
     }
     
     function updateBackButton() {
       const t = translations[currentLanguage];
-      if (currentStep === 3 || currentStep === 4) {
-        if (Telegram.WebApp.BackButton && Telegram.WebApp.BackButton.setText) {
+      const custom = document.getElementById("customBackButton");
+      if (currentStep===3||currentStep===4) {
+        if (Telegram.WebApp.BackButton.setText) {
           Telegram.WebApp.BackButton.setText(t.back);
           Telegram.WebApp.BackButton.show();
         }
-        const customBtn = document.getElementById("customBackButton");
-        customBtn.textContent = t.back;
-        customBtn.style.display = "block";
+        custom.textContent = t.back;
+        custom.style.display = "block";
       } else {
-        if (Telegram.WebApp.BackButton && Telegram.WebApp.BackButton.hide) {
-          Telegram.WebApp.BackButton.hide();
-        }
-        document.getElementById("customBackButton").style.display = "none";
+        Telegram.WebApp.BackButton.hide();
+        custom.style.display = "none";
       }
     }
     
@@ -399,30 +362,23 @@
       if (currentStep === 1) {
         showStep(2);
       } else if (currentStep === 2) {
-        const fullName = document.getElementById('full_name').value.trim();
-        const age = document.getElementById('age').value.trim();
-        const complaints = document.getElementById('complaints').value.trim();
-        const duration = document.getElementById('duration').value.trim();
-        const genderEls = document.getElementsByName('gender');
-        let gender = "";
-        for (const el of genderEls) {
-          if (el.checked) { gender = el.value; break; }
+        const fn = document.getElementById("full_name").value.trim();
+        const age = document.getElementById("age").value.trim();
+        const comp = document.getElementById("complaints").value.trim();
+        const dur = document.getElementById("duration").value.trim();
+        let gen = "";
+        document.getElementsByName("gender").forEach(el => { if(el.checked) gen=el.value; });
+        if (!fn||!age||!gen||!comp||!dur) {
+          alert("Пожалуйста, заполните все поля"); return;
         }
-        if (!fullName || !age || !gender || !complaints || !duration) {
-          alert("Пожалуйста, заполните все поля");
-          return;
-        }
-        patientData = { full_name: fullName, age: age, gender: gender, complaints: complaints, duration: duration };
+        patientData = { full_name: fn, age, gender: gen, complaints: comp, duration: dur };
         showStep(3);
       } else if (currentStep === 3) {
-        const specialty = document.getElementById('specialty').value;
-        if (!specialty) {
-          alert("Пожалуйста, выберите специальность");
-          return;
-        }
-        patientData.specialty = specialty;
+        const spec = document.getElementById("specialty").value;
+        if (!spec) { alert("Пожалуйста, выберите специальность"); return; }
+        patientData.specialty = spec;
         const t = translations[currentLanguage];
-        const summaryText = `
+        document.getElementById("summary").innerHTML = `
           <p><strong>${t.label_full_name}</strong> ${patientData.full_name}</p>
           <p><strong>${t.label_age}</strong> ${patientData.age}</p>
           <p><strong>${t.label_gender}</strong> ${patientData.gender}</p>
@@ -430,67 +386,54 @@
           <p><strong>${t.label_duration}</strong> ${patientData.duration}</p>
           <p><strong>${t.label_specialty}</strong> ${patientData.specialty}</p>
         `;
-        document.getElementById("summary").innerHTML = summaryText;
         showStep(4);
       } else if (currentStep === 4) {
-        const contacts = document.getElementById('contacts').value.trim();
-        const address = document.getElementById('address').value.trim();
-        if (!contacts || !address) {
-          alert("Пожалуйста, заполните поля Контакты и Адрес");
-          return;
+        const contacts = document.getElementById("contacts").value.trim();
+        const address = document.getElementById("address").value.trim();
+        if (!contacts||!address) {
+          alert("Пожалуйста, заполните поля Контакты и Адрес"); return;
         }
         patientData.contacts = contacts;
         patientData.address = address;
         
-        // Добавляем данные Telegram
-        const telegramUser = Telegram.WebApp.initDataUnsafe.user;
-        patientData.user_id = telegramUser.id;
-        patientData.initData = Telegram.WebApp.initData;
-        
-        // Используем FormData для отправки текстовых данных и файла (если выбран)
+        const tgUser = Telegram.WebApp.initDataUnsafe.user;
         const formData = new FormData();
-        for (let key in patientData) {
-          formData.append(key, patientData[key]);
-        }
-        formData.append("contacts", contacts);
-        formData.append("address", address);
-        const fileInput = document.getElementById("complaint_photo");
-        if (fileInput && fileInput.files.length > 0) {
-          formData.append("complaint_photo", fileInput.files[0]);
+        formData.append("user_id", String(tgUser.id));
+        formData.append("full_name", patientData.full_name);
+        formData.append("age", patientData.age);
+        formData.append("gender", patientData.gender);
+        formData.append("complaints", patientData.complaints);
+        formData.append("duration", patientData.duration);
+        formData.append("specialty", patientData.specialty);
+        formData.append("contacts", patientData.contacts);
+        formData.append("address", patientData.address);
+        const fileIn = document.getElementById("complaint_photo");
+        if (fileIn.files.length>0) {
+          formData.append("complaint_photo", fileIn.files[0]);
         }
         
-        fetch(`https://84dbff1b2d0c0ec151c8791fba2fc863.serveo.net/api/open`, {
-          method: 'POST',
+        fetch("https://082cc122c7f2baef9f2e7853a3a4d377.serveo.net/api/open", {
+          method: "POST",
           body: formData
         })
-          .then(response => {
-            if (!response.ok) {
-              throw new Error("Ошибка при отправке данных на сервер");
-            }
-            return response.text();
-          })
-          .then(result => {
-            console.log('Ответ сервера:', result);
-            showStep(5);
-          })
-          .catch(error => {
-            console.error('Ошибка при отправке данных:', error);
-            alert("Ошибка при отправке данных на сервер.");
-          });
+        .then(r => {
+          if (!r.ok) throw new Error("Ошибка при отправке");
+          return r.text();
+        })
+        .then(() => showStep(5))
+        .catch(e => {
+          console.error(e);
+          alert("Ошибка при отправке данных на сервер.");
+        });
       }
     });
     
     Telegram.WebApp.onEvent("backButtonClicked", () => {
-      if (currentStep > 1) {
-        showStep(currentStep - 1);
-      }
+      if (currentStep>1) showStep(currentStep-1);
     });
-    
-    document.getElementById("customBackButton").addEventListener("click", () => {
-      if (currentStep > 1) {
-        showStep(currentStep - 1);
-      }
-    });
+    document.getElementById("customBackButton").onclick = () => {
+      if (currentStep>1) showStep(currentStep-1);
+    };
     
     updateLanguage();
     showStep(1);

@@ -35,6 +35,7 @@ func main() {
 	opts := []bot.Option{
 		bot.WithDefaultHandler(h.DefaultHandler),
 		bot.WithCallbackQueryDataHandler("doctor_", bot.MatchTypePrefix, h.InlineHandlerWrapper),
+		bot.WithCallbackQueryDataHandler("delete_", bot.MatchTypePrefix, h.DeleteMessageHandler),
 	}
 	b, err := bot.New(token, opts...)
 	if err != nil {

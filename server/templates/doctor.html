@@ -1,3 +1,4 @@
+<!-- index.html -->
 <!DOCTYPE html>
 <html lang="ru">
 <head>
@@ -70,28 +71,15 @@
       transition: background .2s;
       margin-top: 10px;
     }
-    .btn {
-      background: var(--accent-light);
-      color: #fff;
-    }
+    .btn { background: var(--accent-light); color: #fff; }
     .btn:hover { background: #1e7e34; }
-    .nav-btn {
-      background: #ccc;
-      color: #333;
-      margin: 0 10px;
-    }
+    .nav-btn { background: #ccc; color: #333; margin: 0 10px; }
     .nav-btn:hover { background: #bbb; }
 
     form { text-align: left; }
     .form-group { margin-bottom: var(--pad); }
-    label {
-      display: block;
-      margin-bottom: 5px;
-      font-weight: bold;
-    }
-    input[type="text"],
-    input[type="tel"],
-    input[type="file"] {
+    label { display: block; margin-bottom: 5px; font-weight: bold; }
+    input[type="text"], input[type="tel"], input[type="file"], select {
       width: 100%;
       padding: 10px;
       font-size: 1em;
@@ -99,10 +87,7 @@
       border-radius: var(--radius);
     }
 
-    #previewContent p {
-      margin-bottom: 10px;
-      text-align: left;
-    }
+    #previewContent p { margin-bottom: 10px; text-align: left; }
     #previewContent img {
       display: block;
       max-width: 120px;
@@ -113,19 +98,18 @@
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
 <body>
-
   <div class="lang-switch">
     <button onclick="setLang('ru')">RU</button>
     <button onclick="setLang('kz')">KZ</button>
   </div>
 
-  <!-- Шаг 1: Welcome -->
+  <!-- Step 1: Welcome -->
   <div id="step1" class="page active">
     <h1>Добро пожаловать на регистрацию врача!</h1>
     <button id="toForm" class="btn">Регистрация</button>
   </div>
 
-  <!-- Шаг 2: Форма -->
+  <!-- Step 2: Registration Form -->
   <div id="step2" class="page">
     <h1>Регистрация врача</h1>
     <form id="doctorForm" enctype="multipart/form-data">
@@ -149,6 +133,21 @@
         <label for="contact">Контактный номер</label>
         <input type="tel" id="contact" name="contact" placeholder="+7 (___) ___-__-__" required>
       </div>
+      <div class="form-group">
+        <label for="specialty">Специальность</label>
+        <select id="specialty" name="specialty" required>
+          <option value="Терапевт">Терапевт</option>
+          <option value="Хирург">Хирург</option>
+          <option value="Кардиолог">Кардиолог</option>
+          <option value="Невролог">Невролог</option>
+          <option value="ЛОР">ЛОР</option>
+          <option value="Психолог">Психолог</option>
+          <option value="Врач на дому">Врач на дому</option>
+          <option value="Медсестра на дому">Медсестра на дому</option>
+          <option value="Анализ">Анализ</option>
+          <option value="Капельница к медперсоналу">Капельница к медперсоналу</option>
+        </select>
+      </div>
       <input type="hidden" name="telegram_id" id="telegram_id">
       <div style="text-align:center;">
         <button type="button" id="back1" class="nav-btn">Назад</button>
@@ -156,7 +155,7 @@
     </form>
   </div>
 
-  <!-- Шаг 3: Превью -->
+  <!-- Step 3: Preview -->
   <div id="step3" class="page">
     <h1>Проверьте введённые данные</h1>
     <div id="previewContent"></div>
@@ -167,8 +166,6 @@
 
   <script>
     Telegram.WebApp.ready();
-
-    // Получаем user и заполняем hidden telegram_id
     const user = Telegram.WebApp.initDataUnsafe?.user;
     if (user) {
       document.getElementById('telegram_id').value = user.id;
@@ -177,30 +174,27 @@
     let currentStep = 1;
     function show(step) {
       currentStep = step;
-      [1,2,3].forEach(i => {
-        document.getElementById('step'+i)
-          .classList.toggle('active', i===step);
-      });
+      [1,2,3].forEach(i => document.getElementById('step'+i).classList.toggle('active', i===step));
       Telegram.WebApp.MainButton.hide();
       if (step === 2) {
         Telegram.WebApp.MainButton.setText('Проверить данные');
         Telegram.WebApp.MainButton.show();
-      }
-      if (step === 3) {
+      } else if (step === 3) {
         Telegram.WebApp.MainButton.setText('Зарегистрироваться');
         Telegram.WebApp.MainButton.show();
       }
     }
 
     document.getElementById('toForm').onclick = () => show(2);
-    document.getElementById('back1').onclick  = () => show(1);
-    document.getElementById('back2').onclick  = () => show(2);
+    document.getElementById('back1').onclick = () => show(1);
+    document.getElementById('back2').onclick = () => show(2);
 
     function buildPreview() {
       const f = document.getElementById('doctorForm');
       if (!f.checkValidity()) { f.reportValidity(); return false; }
       const data = new FormData(f);
       let html = `<p><strong>ФИО:</strong> ${data.get('full_name')}</p>`;
+      html += `<p><strong>Специальность:</strong> ${data.get('specialty')}</p>`;
       ['avatar','diploma','certificate'].forEach(field => {
         const file = data.get(field);
         if (file && file.name) {
@@ -222,7 +216,7 @@
         if (buildPreview()) show(3);
       } else if (currentStep === 3) {
         const fd = new FormData(document.getElementById('doctorForm'));
-        fetch("https://8e5603a614e7bf76bb8157e1c83f060c.serveo.net/doctor", {
+        fetch("https://082cc122c7f2baef9f2e7853a3a4d377.serveo.net/doctor", {
           method: "POST",
           mode: "cors",
           body: fd
@@ -233,21 +227,18 @@
             alert(`Ошибка ${res.status}: ${text}`);
             throw new Error(text);
           }
-          // при успехе закрываем WebApp
           Telegram.WebApp.close();
         })
-        .catch(err => console.error("Fetch error:", err));
+        .catch(err => console.error(err));
       }
     });
 
-    // Инициализация
-    show(1);
-
     function setLang(lang) {
-      // TODO: добавить переводы
       console.log("Language switched to", lang);
     }
-  </script>
 
+    show(1);
+  </script>
 </body>
 </html>
+
