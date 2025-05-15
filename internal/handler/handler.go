@@ -177,7 +177,6 @@ func (h *Handler) DoctorHandler(w http.ResponseWriter, r *http.Request, ctx cont
 		var wg sync.WaitGroup
 		results := make(chan saveResult, len(files))
 
-		// параллельно сохраняем каждую загрузку
 		for _, f := range files {
 			wg.Add(1)
 			go func(field, label, dst string) {
@@ -188,7 +187,6 @@ func (h *Handler) DoctorHandler(w http.ResponseWriter, r *http.Request, ctx cont
 					return
 				}
 				defer file.Close()
-
 				name := fmt.Sprintf("%d_%s", time.Now().UnixNano(), hdr.Filename)
 				path := filepath.Join(dst, name)
 				out, err := os.Create(path)
