@@ -26,7 +26,7 @@ func NewConfig() (*Config, error) {
 		RedisDB:                       0,
 		ChannelID:                     2403228914,
 		ChannelName:                   "@jaiAngmeAitamyz",
-		DBName:                        "tanysu.db", // Имя файла базы данных SQLite
+		DBName:                        "mediHub.db", // Имя файла базы данных SQLite
 		ExamplePhotoRegistrationId:    "AgACAgIAAxkBAAOkZ7ikJMnUHUnHpJIUBdIo54yMqjAAAlPvMRsXqclJ8FL8Er6DAAGZAQADAgADeQADNgQ",
 		ExamplePhotoRegistrationGeoId: "AgACAgIAAxkBAAOnZ7ikRlKCnj2xEhc8YO8AARKCWXVgAAJU7zEbF6nJSRIgQCcxY8VPAQADAgADbQADNgQ",
 	}

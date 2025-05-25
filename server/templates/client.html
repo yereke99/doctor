@@ -3,141 +3,478 @@
 <head>
   <meta charset="UTF-8">
   <title>Запись на приём - MedHub</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
   <style>
-    body {
-      background: linear-gradient(135deg, #f0f2f5, #dbeafe);
-      font-family: Arial, sans-serif;
+    :root {
+      --primary: #3b82f6;
+      --primary-dark: #2563eb;
+      --secondary: #10b981;
+      --danger: #ef4444;
+      --warning: #f59e0b;
+      --bg-primary: #ffffff;
+      --bg-secondary: #f8fafc;
+      --bg-tertiary: #f1f5f9;
+      --text-primary: #1e293b;
+      --text-secondary: #64748b;
+      --text-tertiary: #94a3b8;
+      --border: #e2e8f0;
+      --shadow: rgba(0, 0, 0, 0.1);
+      --radius: 16px;
+      --radius-sm: 8px;
+      --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    [data-theme="dark"] {
+      --primary: #60a5fa;
+      --primary-dark: #3b82f6;
+      --secondary: #34d399;
+      --danger: #f87171;
+      --warning: #fbbf24;
+      --bg-primary: #0f172a;
+      --bg-secondary: #1e293b;
+      --bg-tertiary: #334155;
+      --text-primary: #f1f5f9;
+      --text-secondary: #cbd5e1;
+      --text-tertiary: #94a3b8;
+      --border: #334155;
+      --shadow: rgba(0, 0, 0, 0.3);
+    }
+
+    * {
       margin: 0;
-      padding: 20px;
-      display: flex;
-      justify-content: center;
-      align-items: center;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      background: var(--bg-secondary);
+      color: var(--text-primary);
+      transition: var(--transition);
       min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
       position: relative;
+      overflow-x: hidden;
     }
+
+    body::before {
+      content: '';
+      position: fixed;
+      top: -50%;
+      right: -50%;
+      width: 200%;
+      height: 200%;
+      background: radial-gradient(circle, var(--primary) 0%, transparent 70%);
+      opacity: 0.05;
+      animation: float 20s ease-in-out infinite;
+      pointer-events: none;
+    }
+
+    @keyframes float {
+      0%, 100% { transform: translate(0, 0) rotate(0deg); }
+      50% { transform: translate(-50px, -50px) rotate(180deg); }
+    }
+
     .lang-switch {
-      position: absolute;
-      top: 100px;
-      right: 10px;
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      display: flex;
+      gap: 8px;
+      z-index: 1000;
+      background: var(--bg-primary);
+      padding: 4px;
+      border-radius: var(--radius-sm);
+      box-shadow: 0 2px 8px var(--shadow);
+      transition: var(--transition);
     }
+
     .lang-switch button {
-      margin-left: 10px;
-      padding: 5px 10px;
+      padding: 8px 16px;
       border: none;
-      border-radius: 3px;
-      background: #007bff;
-      color: white;
+      border-radius: 6px;
+      background: transparent;
+      color: var(--text-secondary);
       cursor: pointer;
-      transition: 0.3s;
-      font-weight: bold;
+      font-size: 14px;
+      font-weight: 500;
+      transition: var(--transition);
+      position: relative;
+      overflow: hidden;
     }
-    .lang-switch button:hover {
-      opacity: 0.9;
+
+    .lang-switch button.active {
+      background: var(--primary);
+      color: white;
     }
+
+    .lang-switch button:hover:not(.active) {
+      background: var(--bg-tertiary);
+    }
+
     .container {
-      background: #fff;
-      padding: 30px;
-      border-radius: 10px;
-      box-shadow: 0 4px 16px rgba(0,0,0,0.2);
-      max-width: 600px;
+      background: var(--bg-primary);
+      padding: 40px;
+      border-radius: var(--radius);
+      box-shadow: 0 10px 40px var(--shadow);
+      max-width: 480px;
       width: 100%;
+      position: relative;
+      overflow: hidden;
+      transition: var(--transition);
     }
+
+    .container::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 4px;
+      background: linear-gradient(90deg, var(--primary), var(--secondary));
+      transition: var(--transition);
+    }
+
     @media (max-width: 600px) {
       .container {
+        padding: 30px 20px;
         max-height: calc(100vh - 40px);
         overflow-y: auto;
         -webkit-overflow-scrolling: touch;
       }
+      
+      .lang-switch {
+        top: 10px;
+        right: 10px;
+      }
     }
-    h1, p, label {
+
+    .step {
+      animation: fadeIn 0.5s ease-out;
+    }
+
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+        transform: translateY(20px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    h1 {
+      font-size: 28px;
+      font-weight: 700;
+      margin-bottom: 12px;
+      color: var(--text-primary);
       text-align: center;
+      transition: var(--transition);
     }
+
+    p {
+      color: var(--text-secondary);
+      text-align: center;
+      margin-bottom: 30px;
+      line-height: 1.6;
+      transition: var(--transition);
+    }
+
     .form-group {
-      margin-bottom: 15px;
-      text-align: left;
+      margin-bottom: 24px;
+      transition: var(--transition);
     }
+
     label {
-      font-weight: bold;
-      color: #444;
-      margin-bottom: 5px;
+      display: block;
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text-primary);
+      margin-bottom: 8px;
+      transition: var(--transition);
     }
+
     input[type="text"],
     input[type="number"],
     input[type="tel"],
     textarea,
     select {
       width: 100%;
-      padding: 10px;
-      border: 1px solid #ddd;
-      border-radius: 5px;
+      padding: 12px 16px;
+      border: 2px solid var(--border);
+      border-radius: var(--radius-sm);
       font-size: 16px;
+      background: var(--bg-secondary);
+      color: var(--text-primary);
+      transition: var(--transition);
+      outline: none;
     }
+
+    input[type="text"]:focus,
+    input[type="number"]:focus,
+    input[type="tel"]:focus,
+    textarea:focus,
+    select:focus {
+      border-color: var(--primary);
+      background: var(--bg-primary);
+      box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.1);
+    }
+
+    input[type="file"] {
+      width: 100%;
+      padding: 10px;
+      border: 2px dashed var(--border);
+      border-radius: var(--radius-sm);
+      background: var(--bg-secondary);
+      color: var(--text-primary);
+      cursor: pointer;
+      transition: var(--transition);
+    }
+
+    input[type="file"]:hover {
+      border-color: var(--primary);
+      background: var(--bg-tertiary);
+    }
+
     textarea {
       resize: vertical;
-      min-height: 80px;
+      min-height: 100px;
+      font-family: inherit;
     }
+
+    select {
+      cursor: pointer;
+      appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%2364748b' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 16px center;
+      padding-right: 40px;
+    }
+
     .radio-group {
       display: flex;
       gap: 20px;
       align-items: center;
       justify-content: center;
+      margin-top: 12px;
     }
+
     .radio-group label {
-      font-weight: normal;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-weight: 500;
+      cursor: pointer;
+      padding: 12px 24px;
+      border: 2px solid var(--border);
+      border-radius: var(--radius-sm);
+      transition: var(--transition);
+      margin-bottom: 0;
     }
+
+    .radio-group label:hover {
+      border-color: var(--primary);
+      background: var(--bg-secondary);
+    }
+
+    .radio-group input[type="radio"] {
+      width: 20px;
+      height: 20px;
+      accent-color: var(--primary);
+      cursor: pointer;
+    }
+
+    .radio-group label.selected {
+      border-color: var(--primary);
+      background: rgba(59, 130, 246, 0.1);
+    }
+
+    .summary-item {
+      display: flex;
+      justify-content: space-between;
+      padding: 12px 0;
+      border-bottom: 1px solid var(--border);
+      transition: var(--transition);
+    }
+
+    .summary-item:last-child {
+      border-bottom: none;
+    }
+
+    .summary-item strong {
+      color: var(--text-secondary);
+      font-weight: 500;
+    }
+
+    .summary-item span {
+      color: var(--text-primary);
+      font-weight: 600;
+    }
+
+    .success-icon {
+      width: 80px;
+      height: 80px;
+      margin: 0 auto 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(135deg, var(--primary), var(--secondary));
+      border-radius: 50%;
+      animation: pulse 2s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+      0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.4); }
+      50% { transform: scale(1.05); box-shadow: 0 0 0 20px rgba(59, 130, 246, 0); }
+      100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(59, 130, 246, 0); }
+    }
+
+    .success-icon svg {
+      width: 40px;
+      height: 40px;
+      stroke: white;
+      stroke-width: 3;
+    }
+
+    a {
+      color: var(--primary);
+      text-decoration: none;
+      font-weight: 600;
+      transition: var(--transition);
+    }
+
+    a:hover {
+      text-decoration: underline;
+    }
+
     .hidden {
-      display: none;
+      display: none !important;
     }
+
     #customBackButton {
       position: fixed;
       bottom: 20px;
       left: 20px;
-      background: #007bff;
-      color: #fff;
-      padding: 10px 15px;
-      border: none;
-      border-radius: 5px;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      padding: 12px 24px;
+      border: 2px solid var(--border);
+      border-radius: var(--radius-sm);
       font-size: 16px;
+      font-weight: 600;
       cursor: pointer;
       z-index: 1000;
       display: none;
+      transition: var(--transition);
+      box-shadow: 0 4px 12px var(--shadow);
+    }
+
+    #customBackButton:hover {
+      background: var(--bg-tertiary);
+      transform: translateY(-2px);
+      box-shadow: 0 6px 16px var(--shadow);
+    }
+
+    .progress-bar {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 4px;
+      background: var(--bg-tertiary);
+      overflow: hidden;
+    }
+
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--primary), var(--secondary));
+      transition: width 0.5s ease-out;
+    }
+
+    .error-message {
+      color: var(--danger);
+      font-size: 14px;
+      margin-top: 8px;
+      display: none;
+    }
+
+    .shake {
+      animation: shake 0.5s ease-in-out;
+    }
+
+    @keyframes shake {
+      0%, 100% { transform: translateX(0); }
+      25% { transform: translateX(-10px); }
+      75% { transform: translateX(10px); }
+    }
+
+    .loading {
+      display: inline-block;
+      width: 20px;
+      height: 20px;
+      border: 3px solid var(--bg-tertiary);
+      border-top-color: var(--primary);
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin-left: 10px;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
     }
   </style>
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
 <body>
   <div class="lang-switch" id="langSwitch">
-    <button onclick="changeLanguage('ru')">Русский</button>
-    <button onclick="changeLanguage('kz')">Қазақша</button>
+    <button onclick="changeLanguage('ru')" class="active" id="langRu">Русский</button>
+    <button onclick="changeLanguage('kz')" id="langKz">Қазақша</button>
   </div>
   
   <div class="container">
-    <div id="step1">
+    <div class="progress-bar">
+      <div class="progress-fill" id="progressFill" style="width: 20%"></div>
+    </div>
+    
+    <div id="step1" class="step">
       <h1 id="step1_title">Здравствуйте!</h1>
       <p id="step1_message">Добро пожаловать в MedHub. Чем могу помочь?</p>
     </div>
     
-    <div id="step2" class="hidden">
+    <div id="step2" class="step hidden">
       <h1 id="step2_title">Данные пациента</h1>
       <div class="form-group">
         <label id="label_full_name" for="full_name">ФИО:</label>
         <input type="text" id="full_name" required>
+        <div class="error-message" id="error_full_name">Пожалуйста, введите ФИО</div>
       </div>
       <div class="form-group">
-        <label id="label_gender" for="gender">Пол:</label>
+        <label id="label_gender">Пол:</label>
         <div class="radio-group">
-          <label><input type="radio" name="gender" value="Муж" required> <span id="gender_male_text">Муж</span></label>
-          <label><input type="radio" name="gender" value="Жен" required> <span id="gender_female_text">Жен</span></label>
+          <label for="gender_male">
+            <input type="radio" name="gender" value="Муж" id="gender_male" required>
+            <span id="gender_male_text">Муж</span>
+          </label>
+          <label for="gender_female">
+            <input type="radio" name="gender" value="Жен" id="gender_female" required>
+            <span id="gender_female_text">Жен</span>
+          </label>
         </div>
+        <div class="error-message" id="error_gender">Пожалуйста, выберите пол</div>
       </div>
       <div class="form-group">
         <label id="label_age" for="age">Возраст:</label>
-        <input type="number" id="age" required>
+        <input type="number" id="age" min="1" max="150" required>
+        <div class="error-message" id="error_age">Пожалуйста, введите корректный возраст</div>
       </div>
       <div class="form-group">
         <label id="label_complaints" for="complaints">Жалобы (кратко):</label>
         <textarea id="complaints" required></textarea>
+        <div class="error-message" id="error_complaints">Пожалуйста, опишите жалобы</div>
       </div>
       <div class="form-group">
         <label id="label_complaint_photo" for="complaint_photo">Фото жалобы (если есть):</label>
@@ -145,11 +482,12 @@
       </div>
       <div class="form-group">
         <label id="label_duration" for="duration">Сколько времени беспокоит (в днях):</label>
-        <input type="number" id="duration" required>
+        <input type="number" id="duration" min="1" required>
+        <div class="error-message" id="error_duration">Пожалуйста, укажите длительность</div>
       </div>
     </div>
     
-    <div id="step3" class="hidden">
+    <div id="step3" class="step hidden">
       <h1 id="step3_title">Выберите врача/специальность</h1>
       <div class="form-group">
         <label id="label_specialty" for="specialty">Специальность:</label>
@@ -166,28 +504,36 @@
           <option value="Анализ" id="option_analysis">Анализ</option>
           <option value="Капельница к медперсоналу" id="option_iv_drip">Капельница к медперсоналу</option>
         </select>
+        <div class="error-message" id="error_specialty">Пожалуйста, выберите специальность</div>
       </div>
     </div>
     
-    <div id="step4" class="hidden">
+    <div id="step4" class="step hidden">
       <h1 id="step4_title">Подтверждение записи</h1>
       <div id="summary"></div>
       <div class="form-group">
         <label id="label_contacts" for="contacts">Контакты (только цифры):</label>
         <input type="tel" id="contacts" pattern="\d+" required>
+        <div class="error-message" id="error_contacts">Введите корректный номер телефона</div>
       </div>
       <div class="form-group">
         <label id="label_address" for="address">Адрес:</label>
         <input type="text" id="address" required>
+        <div class="error-message" id="error_address">Пожалуйста, введите адрес</div>
       </div>
     </div>
     
-    <div id="step5" class="hidden">
+    <div id="step5" class="step hidden">
+      <div class="success-icon">
+        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M5 13l4 4L19 7" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </div>
       <h1 id="step5_title">Спасибо!</h1>
       <p id="step5_message">
         Ваша запись подтверждена. Врач скоро свяжется с вами.<br>
         Для продолжения, перейдите к нашему боту: 
-        <a href="https://t.me/dariger_test_bot" target="_blank">https://t.me/dariger_test_bot</a>
+        <a href="https://t.me/dariger_test_bot" target="_blank">@dariger_test_bot</a>
       </p>
     </div>
   </div>
@@ -195,13 +541,28 @@
   <button id="customBackButton"></button>
   
   <script>
+    // Initialize Telegram Web App
     Telegram.WebApp.ready();
     Telegram.WebApp.expand();
     
+    // State management
     let currentStep = 1;
     let patientData = {};
     let currentLanguage = "ru";
+    let isSubmitting = false;
     
+    // Theme detection and management
+    const detectTheme = () => {
+      const hour = new Date().getHours();
+      const isDark = hour >= 19 || hour < 7;
+      document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light');
+    };
+    
+    // Apply theme on load and check every minute
+    detectTheme();
+    setInterval(detectTheme, 60000);
+    
+    // Translations
     const translations = {
       ru: {
         step1_title: "Здравствуйте!",
@@ -236,8 +597,17 @@
         label_address: "Адрес:",
         btn_confirm: "Подтвердить запись",
         step5_title: "Спасибо!",
-        step5_message: "Ваша запись подтверждена. Врач скоро свяжется с вами.",
-        back: "Назад"
+        step5_message: "Ваша запись подтверждена. Врач скоро свяжется с вами.<br>Для продолжения, перейдите к нашему боту: ",
+        back: "Назад",
+        error_full_name: "Пожалуйста, введите ФИО",
+        error_gender: "Пожалуйста, выберите пол",
+        error_age: "Пожалуйста, введите корректный возраст",
+        error_complaints: "Пожалуйста, опишите жалобы",
+        error_duration: "Пожалуйста, укажите длительность",
+        error_specialty: "Пожалуйста, выберите специальность",
+        error_contacts: "Введите корректный номер телефона",
+        error_address: "Пожалуйста, введите адрес",
+        error_submit: "Ошибка при отправке данных. Попробуйте снова."
       },
       kz: {
         step1_title: "Сәлеметсіз бе!",
@@ -272,13 +642,63 @@
         label_address: "Мекен-жай:",
         btn_confirm: "Жазылымды растау",
         step5_title: "Рақмет!",
-        step5_message: "Сіздің жазылымыңыз расталды. Дәрігер жақын арада хабарласады.",
-        back: "Артқа"
+        step5_message: "Сіздің жазылымыңыз расталды. Дәрігер жақын арада хабарласады.<br>Жалғастыру үшін біздің ботқа өтіңіз: ",
+        back: "Артқа",
+        error_full_name: "Аты-жөніңізді енгізіңіз",
+        error_gender: "Жынысты таңдаңыз",
+        error_age: "Дұрыс жас енгізіңіз",
+        error_complaints: "Шағымдарды сипаттаңыз",
+        error_duration: "Ұзақтығын көрсетіңіз",
+        error_specialty: "Мамандықты таңдаңыз",
+        error_contacts: "Дұрыс телефон нөмірін енгізіңіз",
+        error_address: "Мекен-жайды енгізіңіз",
+        error_submit: "Деректерді жіберу кезінде қате. Қайта көріңіз."
       }
     };
     
-    function updateLanguage() {
+    // Helper functions
+    const validateField = (fieldId, errorId) => {
+      const field = document.getElementById(fieldId);
+      const error = document.getElementById(errorId);
+      const value = field.value ? field.value.trim() : '';
+      
+      if (!value) {
+        field.classList.add('shake');
+        error.style.display = 'block';
+        setTimeout(() => field.classList.remove('shake'), 500);
+        return false;
+      }
+      
+      error.style.display = 'none';
+      return true;
+    };
+    
+    const validateRadio = (name, errorId) => {
+      const radios = document.getElementsByName(name);
+      const error = document.getElementById(errorId);
+      let selected = false;
+      
+      radios.forEach(radio => {
+        if (radio.checked) selected = true;
+      });
+      
+      if (!selected) {
+        error.style.display = 'block';
+        return false;
+      }
+      
+      error.style.display = 'none';
+      return true;
+    };
+    
+    const updateLanguage = () => {
       const t = translations[currentLanguage];
+      
+      // Update language buttons
+      document.getElementById('langRu').classList.toggle('active', currentLanguage === 'ru');
+      document.getElementById('langKz').classList.toggle('active', currentLanguage === 'kz');
+      
+      // Update text content
       document.getElementById("step1_title").textContent = t.step1_title;
       document.getElementById("step1_message").textContent = t.step1_message;
       document.getElementById("step2_title").textContent = t.step2_title;
@@ -303,101 +723,166 @@
       document.getElementById("option_home_nurse").textContent = t.option_home_nurse;
       document.getElementById("option_analysis").textContent = t.option_analysis;
       document.getElementById("option_iv_drip").textContent = t.option_iv_drip;
+      document.getElementById("step4_title").textContent = t.step4_title;
       document.getElementById("label_contacts").textContent = t.label_contacts;
       document.getElementById("label_address").textContent = t.label_address;
+      document.getElementById("step5_title").textContent = t.step5_title;
+      document.getElementById("step5_message").innerHTML = t.step5_message + '<a href="https://t.me/dariger_test_bot" target="_blank">@dariger_test_bot</a>';
+      
+      // Update error messages
+      document.getElementById("error_full_name").textContent = t.error_full_name;
+      document.getElementById("error_gender").textContent = t.error_gender;
+      document.getElementById("error_age").textContent = t.error_age;
+      document.getElementById("error_complaints").textContent = t.error_complaints;
+      document.getElementById("error_duration").textContent = t.error_duration;
+      document.getElementById("error_specialty").textContent = t.error_specialty;
+      document.getElementById("error_contacts").textContent = t.error_contacts;
+      document.getElementById("error_address").textContent = t.error_address;
+      
       updateMainButton();
       updateBackButton();
-      document.getElementById("langSwitch").style.display = (currentStep === 1 ? "block" : "none");
-    }
+      document.getElementById("langSwitch").style.display = (currentStep === 1 ? "flex" : "none");
+    };
     
-    function changeLanguage(lang) {
+    const changeLanguage = (lang) => {
       currentLanguage = lang;
       updateLanguage();
-    }
+    };
     
-    function showStep(step) {
+    const updateProgress = () => {
+      const progress = (currentStep / 5) * 100;
+      document.getElementById('progressFill').style.width = `${progress}%`;
+    };
+    
+    const showStep = (step) => {
       currentStep = step;
-      [1,2,3,4,5].forEach(s => {
-        document.getElementById("step"+s).classList.add("hidden");
-      });
-      document.getElementById("step"+step).classList.remove("hidden");
+      
+      // Hide all steps
+      for (let i = 1; i <= 5; i++) {
+        document.getElementById(`step${i}`).classList.add('hidden');
+      }
+      
+      // Show current step
+      document.getElementById(`step${step}`).classList.remove('hidden');
+      
+      // Update progress
+      updateProgress();
+      
+      // Update buttons and language
       updateMainButton();
       updateBackButton();
       updateLanguage();
-    }
+      
+      // Check if form is filled for step 2
+      if (step === 2) {
+        checkStep2FormFilled();
+      }
+    };
     
-    function updateMainButton() {
+    const checkStep2FormFilled = () => {
+      const fields = ['full_name', 'age', 'complaints', 'duration'];
+      const gender = document.querySelector('input[name="gender"]:checked');
+      
+      const allFilled = fields.every(id => {
+        const field = document.getElementById(id);
+        return field && field.value.trim() !== '';
+      }) && gender;
+      
+      if (allFilled) {
+        Telegram.WebApp.MainButton.show();
+      } else {
+        Telegram.WebApp.MainButton.hide();
+      }
+    };
+    
+    const updateMainButton = () => {
       const t = translations[currentLanguage];
+      
       switch(currentStep) {
         case 1:
-          Telegram.WebApp.MainButton.setText(t.btn_start); Telegram.WebApp.MainButton.show(); break;
+          Telegram.WebApp.MainButton.setText(t.btn_start);
+          Telegram.WebApp.MainButton.show();
+          Telegram.WebApp.MainButton.enable();
+          break;
         case 2:
-          Telegram.WebApp.MainButton.setText(t.btn_to_step3); Telegram.WebApp.MainButton.show(); break;
+          Telegram.WebApp.MainButton.setText(t.btn_to_step3);
+          checkStep2FormFilled();
+          Telegram.WebApp.MainButton.enable();
+          break;
         case 3:
-          Telegram.WebApp.MainButton.setText(t.btn_to_step4); Telegram.WebApp.MainButton.show(); break;
+          Telegram.WebApp.MainButton.setText(t.btn_to_step4);
+          Telegram.WebApp.MainButton.show();
+          Telegram.WebApp.MainButton.enable();
+          break;
         case 4:
-          Telegram.WebApp.MainButton.setText(t.btn_confirm); Telegram.WebApp.MainButton.show(); break;
+          Telegram.WebApp.MainButton.setText(t.btn_confirm);
+          Telegram.WebApp.MainButton.show();
+          Telegram.WebApp.MainButton.enable();
+          break;
         default:
           Telegram.WebApp.MainButton.hide();
       }
-    }
+    };
     
-    function updateBackButton() {
+    const updateBackButton = () => {
       const t = translations[currentLanguage];
-      const custom = document.getElementById("customBackButton");
-      if (currentStep===3||currentStep===4) {
-        if (Telegram.WebApp.BackButton.setText) {
-          Telegram.WebApp.BackButton.setText(t.back);
+      const customBack = document.getElementById("customBackButton");
+      
+      if (currentStep === 3 || currentStep === 4) {
+        if (Telegram.WebApp.BackButton && Telegram.WebApp.BackButton.show) {
           Telegram.WebApp.BackButton.show();
         }
-        custom.textContent = t.back;
-        custom.style.display = "block";
+        customBack.textContent = t.back;
+        customBack.style.display = "block";
       } else {
-        Telegram.WebApp.BackButton.hide();
-        custom.style.display = "none";
+        if (Telegram.WebApp.BackButton && Telegram.WebApp.BackButton.hide) {
+          Telegram.WebApp.BackButton.hide();
+        }
+        customBack.style.display = "none";
       }
-    }
+    };
     
-    Telegram.WebApp.onEvent("mainButtonClicked", () => {
-      if (currentStep === 1) {
-        showStep(2);
-      } else if (currentStep === 2) {
-        const fn = document.getElementById("full_name").value.trim();
-        const age = document.getElementById("age").value.trim();
-        const comp = document.getElementById("complaints").value.trim();
-        const dur = document.getElementById("duration").value.trim();
-        let gen = "";
-        document.getElementsByName("gender").forEach(el => { if(el.checked) gen=el.value; });
-        if (!fn||!age||!gen||!comp||!dur) {
-          alert("Пожалуйста, заполните все поля"); return;
-        }
-        patientData = { full_name: fn, age, gender: gen, complaints: comp, duration: dur };
-        showStep(3);
-      } else if (currentStep === 3) {
-        const spec = document.getElementById("specialty").value;
-        if (!spec) { alert("Пожалуйста, выберите специальность"); return; }
-        patientData.specialty = spec;
-        const t = translations[currentLanguage];
-        document.getElementById("summary").innerHTML = `
-          <p><strong>${t.label_full_name}</strong> ${patientData.full_name}</p>
-          <p><strong>${t.label_age}</strong> ${patientData.age}</p>
-          <p><strong>${t.label_gender}</strong> ${patientData.gender}</p>
-          <p><strong>${t.label_complaints}</strong> ${patientData.complaints}</p>
-          <p><strong>${t.label_duration}</strong> ${patientData.duration}</p>
-          <p><strong>${t.label_specialty}</strong> ${patientData.specialty}</p>
-        `;
-        showStep(4);
-      } else if (currentStep === 4) {
-        const contacts = document.getElementById("contacts").value.trim();
-        const address = document.getElementById("address").value.trim();
-        if (!contacts||!address) {
-          alert("Пожалуйста, заполните поля Контакты и Адрес"); return;
-        }
-        patientData.contacts = contacts;
-        patientData.address = address;
+    const validateStep2 = () => {
+      const isValidName = validateField('full_name', 'error_full_name');
+      const isValidGender = validateRadio('gender', 'error_gender');
+      const isValidAge = validateField('age', 'error_age');
+      const isValidComplaints = validateField('complaints', 'error_complaints');
+      const isValidDuration = validateField('duration', 'error_duration');
+      
+      return isValidName && isValidGender && isValidAge && isValidComplaints && isValidDuration;
+    };
+    
+    const validateStep3 = () => {
+      return validateField('specialty', 'error_specialty');
+    };
+    
+    const validateStep4 = () => {
+      const isValidContacts = validateField('contacts', 'error_contacts');
+      const isValidAddress = validateField('address', 'error_address');
+      
+      // Additional phone validation
+      const contacts = document.getElementById('contacts').value;
+      if (contacts && !/^\d+$/.test(contacts)) {
+        document.getElementById('error_contacts').style.display = 'block';
+        return false;
+      }
+      
+      return isValidContacts && isValidAddress;
+    };
+    
+    const submitForm = async () => {
+      if (isSubmitting) return;
+      
+      const t = translations[currentLanguage];
+      
+      try {
+        isSubmitting = true;
+        Telegram.WebApp.MainButton.setText(t.btn_confirm + '<span class="loading"></span>');
+        Telegram.WebApp.MainButton.disable();
         
-        const tgUser = Telegram.WebApp.initDataUnsafe.user;
+        const tgUser = Telegram.WebApp.initDataUnsafe.user || { id: 'test_user' };
         const formData = new FormData();
+        
         formData.append("user_id", String(tgUser.id));
         formData.append("full_name", patientData.full_name);
         formData.append("age", patientData.age);
@@ -407,34 +892,136 @@
         formData.append("specialty", patientData.specialty);
         formData.append("contacts", patientData.contacts);
         formData.append("address", patientData.address);
-        const fileIn = document.getElementById("complaint_photo");
-        if (fileIn.files.length>0) {
-          formData.append("complaint_photo", fileIn.files[0]);
+        
+        const fileInput = document.getElementById("complaint_photo");
+        if (fileInput.files.length > 0) {
+          formData.append("complaint_photo", fileInput.files[0]);
         }
         
-        fetch("https://056af5ad70ac68.lhr.life/api/open", {
+        const response = await fetch("https://4aca477db6a21dabf398441626e716d0.serveo.net/api/open", {
           method: "POST",
           body: formData
-        })
-        .then(r => {
-          if (!r.ok) throw new Error("Ошибка при отправке");
-          return r.text();
-        })
-        .then(() => showStep(5))
-        .catch(e => {
-          console.error(e);
-          alert("Ошибка при отправке данных на сервер.");
         });
+        
+        if (!response.ok) {
+          throw new Error("Server error");
+        }
+        
+        showStep(5);
+      } catch (error) {
+        console.error("Submit error:", error);
+        alert(t.error_submit);
+        Telegram.WebApp.MainButton.setText(t.btn_confirm);
+        Telegram.WebApp.MainButton.enable();
+      } finally {
+        isSubmitting = false;
+      }
+    };
+    
+    // Event listeners
+    Telegram.WebApp.onEvent("mainButtonClicked", async () => {
+      if (currentStep === 1) {
+        showStep(2);
+      } else if (currentStep === 2) {
+        if (validateStep2()) {
+          const gender = document.querySelector('input[name="gender"]:checked').value;
+          patientData = {
+            full_name: document.getElementById("full_name").value.trim(),
+            age: document.getElementById("age").value.trim(),
+            gender: gender,
+            complaints: document.getElementById("complaints").value.trim(),
+            duration: document.getElementById("duration").value.trim()
+          };
+          showStep(3);
+        }
+      } else if (currentStep === 3) {
+        if (validateStep3()) {
+          patientData.specialty = document.getElementById("specialty").value;
+          
+          // Generate summary
+          const t = translations[currentLanguage];
+          document.getElementById("summary").innerHTML = `
+            <div class="summary-item">
+              <strong>${t.label_full_name}</strong>
+              <span>${patientData.full_name}</span>
+            </div>
+            <div class="summary-item">
+              <strong>${t.label_age}</strong>
+              <span>${patientData.age}</span>
+            </div>
+            <div class="summary-item">
+              <strong>${t.label_gender}</strong>
+              <span>${patientData.gender}</span>
+            </div>
+            <div class="summary-item">
+              <strong>${t.label_complaints}</strong>
+              <span>${patientData.complaints}</span>
+            </div>
+            <div class="summary-item">
+              <strong>${t.label_duration}</strong>
+              <span>${patientData.duration}</span>
+            </div>
+            <div class="summary-item">
+              <strong>${t.label_specialty}</strong>
+              <span>${patientData.specialty}</span>
+            </div>
+          `;
+          
+          showStep(4);
+        }
+      } else if (currentStep === 4) {
+        if (validateStep4()) {
+          patientData.contacts = document.getElementById("contacts").value.trim();
+          patientData.address = document.getElementById("address").value.trim();
+          await submitForm();
+        }
       }
     });
     
     Telegram.WebApp.onEvent("backButtonClicked", () => {
-      if (currentStep>1) showStep(currentStep-1);
+      if (currentStep > 1) {
+        showStep(currentStep - 1);
+      }
     });
+    
     document.getElementById("customBackButton").onclick = () => {
-      if (currentStep>1) showStep(currentStep-1);
+      if (currentStep > 1) {
+        showStep(currentStep - 1);
+      }
     };
     
+    // Add event listeners for form fields in step 2
+    ['full_name', 'age', 'complaints', 'duration'].forEach(id => {
+      const field = document.getElementById(id);
+      if (field) {
+        field.addEventListener('input', checkStep2FormFilled);
+      }
+    });
+    
+    // Add event listeners for radio buttons
+    document.querySelectorAll('input[name="gender"]').forEach(radio => {
+      radio.addEventListener('change', (e) => {
+        // Update visual state
+        document.querySelectorAll('.radio-group label').forEach(label => {
+          label.classList.remove('selected');
+        });
+        e.target.closest('label').classList.add('selected');
+        checkStep2FormFilled();
+      });
+    });
+    
+    // Clear error on input
+    document.querySelectorAll('input, textarea, select').forEach(field => {
+      field.addEventListener('input', () => {
+        const errorId = `error_${field.id}`;
+        const error = document.getElementById(errorId);
+        if (error) {
+          error.style.display = 'none';
+        }
+      });
+    });
+    
+    // Initialize
     updateLanguage();
     showStep(1);
   </script>

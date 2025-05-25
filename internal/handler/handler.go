@@ -320,6 +320,7 @@ func (h *Handler) PatientAppointmentHandler(w http.ResponseWriter, r *http.Reque
 
 	go func() {
 		// 1) сохраняем фото
+		var photoPath, fileName string
 		if len(photoData) > 0 {
 			dir := "./patient"
 			if err := os.MkdirAll(dir, 0755); err != nil {
@@ -330,7 +331,10 @@ func (h *Handler) PatientAppointmentHandler(w http.ResponseWriter, r *http.Reque
 			if err := os.WriteFile(path, photoData, 0644); err != nil {
 				h.logger.Warn("Ошибка сохранения фото", zap.Error(err))
 			}
+			photoPath, fileName = path, fn
 		}
+
+		photoPath, fileName = "", ""
 
 		// 2) готовим текст сообщения
 		dispSpec := rawSpecialty
@@ -348,6 +352,12 @@ func (h *Handler) PatientAppointmentHandler(w http.ResponseWriter, r *http.Reque
 		// 3) рассылаем врачам и сохраняем msgID
 		userID, _ := strconv.ParseInt(userIDStr, 10, 64)
 		var sent []docMsg
+		f, err := os.Open(photoPath)
+		if err != nil {
+			h.logger.Warn("Ошибка открытия файла", zap.Error(err))
+			return
+		}
+		defer f.Close()
 		for _, doc := range h.doctorsBySpecialty[rawSpecialty] {
 			cb := fmt.Sprintf("delete_%d_%d", userID, doc.TelegramID)
 			markup := &models.InlineKeyboardMarkup{
@@ -355,16 +365,35 @@ func (h *Handler) PatientAppointmentHandler(w http.ResponseWriter, r *http.Reque
 					{Text: "✅ Қабылдадым", CallbackData: cb},
 				}},
 			}
-			msg, err := b.SendMessage(ctx, &bot.SendMessageParams{
-				ChatID:      doc.TelegramID,
-				Text:        msgText,
-				ReplyMarkup: markup,
-			})
-			if err == nil {
-				sent = append(sent, docMsg{chatID: doc.TelegramID, msgID: msg.ID})
+
+			if photoPath != "" && fileName != "" {
+				msg, err := b.SendPhoto(ctx, &bot.SendPhotoParams{
+					ChatID: doc.TelegramID,
+					Photo: &models.InputFileUpload{
+						Filename: fileName,
+						Data:     f,
+					},
+					Caption:     msgText,
+					ReplyMarkup: markup,
+				})
+				if err == nil {
+					sent = append(sent, docMsg{chatID: doc.TelegramID, msgID: msg.ID})
+				} else {
+					h.logger.Warn("Ошибка отправки врачу", zap.Error(err))
+				}
 			} else {
-				h.logger.Warn("Ошибка отправки врачу", zap.Error(err))
+				msg, err := b.SendMessage(ctx, &bot.SendMessageParams{
+					ChatID:      doc.TelegramID,
+					Text:        msgText,
+					ReplyMarkup: markup,
+				})
+				if err == nil {
+					sent = append(sent, docMsg{chatID: doc.TelegramID, msgID: msg.ID})
+				} else {
+					h.logger.Warn("Ошибка отправки врачу", zap.Error(err))
+				}
 			}
+
 		}
 
 		// сохраняем для DeleteMessageHandler
