@@ -4,6 +4,7 @@ package handler
 import (
 	"context"
 	"doctor/internal/domain"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log"
@@ -469,18 +470,242 @@ func (h *Handler) DeleteMessageHandler(ctx context.Context, b *bot.Bot, update *
 	})
 }
 
-// StartWebServer запускает HTTP сервер с маршрутами /doctor и /api/open.
+// GetDoctorHandler handles GET requests to fetch doctor data
+func (h *Handler) GetDoctorHandler(w http.ResponseWriter, r *http.Request) {
+	// CORS headers
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "Accept, Content-Type")
+	w.Header().Set("Content-Type", "application/json")
+
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Extract doctor ID from URL path
+	pathParts := strings.Split(r.URL.Path, "/")
+	if len(pathParts) < 3 {
+		http.Error(w, "Invalid doctor ID", http.StatusBadRequest)
+		return
+	}
+
+	doctorIDStr := pathParts[2]
+	doctorID, err := strconv.ParseInt(doctorIDStr, 10, 64)
+	if err != nil {
+		http.Error(w, "Invalid doctor ID format", http.StatusBadRequest)
+		return
+	}
+
+	// Find doctor by Telegram ID
+	h.regMu.Lock()
+	var foundDoctor *domain.DoctorRegistration
+	for _, doc := range h.registrations {
+		if doc.TelegramID == doctorID {
+			foundDoctor = &doc
+			break
+		}
+	}
+	h.regMu.Unlock()
+
+	if foundDoctor == nil {
+		http.Error(w, "Doctor not found", http.StatusNotFound)
+		return
+	}
+
+	// Prepare response
+	response := map[string]interface{}{
+		"id":          foundDoctor.ID,
+		"full_name":   foundDoctor.FullName,
+		"specialty":   foundDoctor.Specialty,
+		"contact":     foundDoctor.Contact,
+		"telegram_id": foundDoctor.TelegramID,
+	}
+
+	// Add avatar URL if available
+	if foundDoctor.AvatarPath != "" {
+		// Convert local path to URL (adjust based on your file serving setup)
+		response["avatar_url"] = fmt.Sprintf("/files/ava/%s", filepath.Base(foundDoctor.AvatarPath))
+	}
+
+	// Send JSON response
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		h.logger.Error("Error encoding JSON response", zap.Error(err))
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+	}
+}
+
+// UpdateDoctorHandler handles PUT requests to update doctor data
+func (h *Handler) UpdateDoctorHandler(w http.ResponseWriter, r *http.Request, ctx context.Context, b *bot.Bot) {
+	// CORS headers
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "PUT, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+	w.Header().Set("Content-Type", "application/json")
+
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
+	if r.Method != http.MethodPut {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Parse form data
+	if err := r.ParseMultipartForm(32 << 20); err != nil {
+		http.Error(w, "Error parsing form: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	// Extract form values
+	telegramIDStr := r.FormValue("telegram_id")
+	fullName := r.FormValue("full_name")
+	specialty := r.FormValue("specialty")
+	contact := r.FormValue("contact")
+
+	// Validate telegram ID
+	telegramID, err := strconv.ParseInt(telegramIDStr, 10, 64)
+	if err != nil {
+		http.Error(w, "Invalid telegram ID", http.StatusBadRequest)
+		return
+	}
+
+	// Validate required fields
+	if fullName == "" || specialty == "" || contact == "" {
+		http.Error(w, "Missing required fields", http.StatusBadRequest)
+		return
+	}
+
+	// Find and update doctor
+	h.regMu.Lock()
+	var updatedDoctor *domain.DoctorRegistration
+	var oldSpecialty string
+
+	// Find doctor by Telegram ID
+	for id, doc := range h.registrations {
+		if doc.TelegramID == telegramID {
+			oldSpecialty = doc.Specialty
+
+			// Update doctor data
+			doc.FullName = fullName
+			doc.Specialty = specialty
+			doc.Contact = contact
+
+			// Save back to map
+			h.registrations[id] = doc
+			updatedDoctor = &doc
+			break
+		}
+	}
+
+	// Update specialty mapping if specialty changed
+	if updatedDoctor != nil && oldSpecialty != specialty {
+		// Remove from old specialty list
+		if doctors, ok := h.doctorsBySpecialty[oldSpecialty]; ok {
+			newDoctors := make([]domain.DoctorRegistration, 0, len(doctors))
+			for _, d := range doctors {
+				if d.TelegramID != telegramID {
+					newDoctors = append(newDoctors, d)
+				}
+			}
+			h.doctorsBySpecialty[oldSpecialty] = newDoctors
+		}
+
+		// Add to new specialty list
+		h.doctorsBySpecialty[specialty] = append(h.doctorsBySpecialty[specialty], *updatedDoctor)
+	}
+	h.regMu.Unlock()
+
+	if updatedDoctor == nil {
+		http.Error(w, "Doctor not found", http.StatusNotFound)
+		return
+	}
+
+	// Prepare response
+	response := map[string]interface{}{
+		"id":          updatedDoctor.ID,
+		"full_name":   updatedDoctor.FullName,
+		"specialty":   updatedDoctor.Specialty,
+		"contact":     updatedDoctor.Contact,
+		"telegram_id": updatedDoctor.TelegramID,
+	}
+
+	// Add avatar URL if available
+	if updatedDoctor.AvatarPath != "" {
+		response["avatar_url"] = fmt.Sprintf("/files/ava/%s", filepath.Base(updatedDoctor.AvatarPath))
+	}
+
+	// Send success notification to doctor
+	go func() {
+		_, err := b.SendMessage(ctx, &bot.SendMessageParams{
+			ChatID: telegramID,
+			Text:   "✅ Ваши данные успешно обновлены!",
+		})
+		if err != nil {
+			h.logger.Warn("Error sending update notification", zap.Error(err))
+		}
+	}()
+
+	// Send JSON response
+	w.WriteHeader(http.StatusOK)
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		h.logger.Error("Error encoding JSON response", zap.Error(err))
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+	}
+}
+
+// Update the StartWebServer method to include new routes
 func (h *Handler) StartWebServer(botToken string, ctx context.Context, b *bot.Bot) {
+	// Existing routes
 	http.HandleFunc("/doctor", func(w http.ResponseWriter, r *http.Request) {
-		h.DoctorHandler(w, r, ctx, b)
+		switch r.Method {
+		case http.MethodPost:
+			h.DoctorHandler(w, r, ctx, b)
+		case http.MethodPut:
+			h.UpdateDoctorHandler(w, r, ctx, b)
+		case http.MethodOptions:
+			w.Header().Set("Access-Control-Allow-Origin", "*")
+			w.Header().Set("Access-Control-Allow-Methods", "POST, PUT, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+			w.WriteHeader(http.StatusOK)
+		default:
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
 	})
+
+	// New route for getting doctor data
+	http.HandleFunc("/doctor/", func(w http.ResponseWriter, r *http.Request) {
+		h.GetDoctorHandler(w, r)
+	})
+
 	http.HandleFunc("/api/open", func(w http.ResponseWriter, r *http.Request) {
 		h.PatientAppointmentHandler(w, r, ctx, b)
 	})
+
+	// Serve static files (avatars and documents)
+	fileServer := http.FileServer(http.Dir("."))
+	http.Handle("/files/", http.StripPrefix("/files/", fileServer))
+
+	// Serve the update mini app
+	http.HandleFunc("/update", func(w http.ResponseWriter, r *http.Request) {
+		http.ServeFile(w, r, "update.html") // You'll need to save the HTML as update.html
+	})
+
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		http.ServeFile(w, r, "index.html")
 	})
+
 	addr := ":8080"
 	h.logger.Info("веб-сервер запущен", zap.String("addr", addr))
 	log.Fatal(http.ListenAndServe(addr, nil))
 }
+
+// Add this import to your imports section:
+// "encoding/json"

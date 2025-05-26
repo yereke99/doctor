@@ -421,6 +421,7 @@
       border-radius: 50%;
       animation: spin 1s linear infinite;
       margin-left: 10px;
+      vertical-align: middle;
     }
 
     @keyframes spin {
@@ -607,7 +608,8 @@
         error_specialty: "Пожалуйста, выберите специальность",
         error_contacts: "Введите корректный номер телефона",
         error_address: "Пожалуйста, введите адрес",
-        error_submit: "Ошибка при отправке данных. Попробуйте снова."
+        error_submit: "Ошибка при отправке данных. Попробуйте снова.",
+        loading: "Отправка..."
       },
       kz: {
         step1_title: "Сәлеметсіз бе!",
@@ -652,7 +654,8 @@
         error_specialty: "Мамандықты таңдаңыз",
         error_contacts: "Дұрыс телефон нөмірін енгізіңіз",
         error_address: "Мекен-жайды енгізіңіз",
-        error_submit: "Деректерді жіберу кезінде қате. Қайта көріңіз."
+        error_submit: "Деректерді жіберу кезінде қате. Қайта көріңіз.",
+        loading: "Жіберілуде..."
       }
     };
     
@@ -877,7 +880,9 @@
       
       try {
         isSubmitting = true;
-        Telegram.WebApp.MainButton.setText(t.btn_confirm + '<span class="loading"></span>');
+        
+        // Update button to show loading state
+        Telegram.WebApp.MainButton.setText(t.loading);
         Telegram.WebApp.MainButton.disable();
         
         const tgUser = Telegram.WebApp.initDataUnsafe.user || { id: 'test_user' };
@@ -907,7 +912,20 @@
           throw new Error("Server error");
         }
         
+        // Show success step
         showStep(5);
+        
+        // Wait a bit to show the success message
+        setTimeout(() => {
+          // Open the bot in Telegram
+          Telegram.WebApp.openTelegramLink('https://t.me/dariger_test_bot');
+          
+          // Close the Mini App after a short delay
+          setTimeout(() => {
+            Telegram.WebApp.close();
+          }, 500);
+        }, 2000);
+        
       } catch (error) {
         console.error("Submit error:", error);
         alert(t.error_submit);

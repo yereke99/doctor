@@ -118,45 +118,6 @@
       50% { transform: rotate(180deg); }
     }
 
-    .theme-toggle {
-      position: fixed;
-      top: 20px;
-      left: 20px;
-      background: var(--card-bg);
-      border: 1px solid var(--card-border);
-      border-radius: 50px;
-      padding: 8px 16px;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      box-shadow: var(--shadow-md);
-      transition: all 0.3s ease;
-      z-index: 1000;
-      cursor: pointer;
-      backdrop-filter: blur(12px);
-      -webkit-backdrop-filter: blur(12px);
-    }
-
-    .theme-toggle:hover {
-      transform: translateY(-2px);
-      box-shadow: var(--shadow-lg);
-    }
-
-    .theme-icon {
-      font-size: 1.2rem;
-      transition: transform 0.3s ease;
-    }
-
-    .theme-toggle:hover .theme-icon {
-      transform: rotate(15deg);
-    }
-
-    .theme-text {
-      font-size: 0.85rem;
-      font-weight: 500;
-      color: var(--text-secondary);
-    }
-
     .lang-switch {
       position: fixed;
       top: 20px;
@@ -594,20 +555,6 @@
         padding: 12px;
       }
 
-      .theme-toggle {
-        top: 12px;
-        left: 12px;
-        padding: 6px 12px;
-      }
-
-      .theme-icon {
-        font-size: 1rem;
-      }
-
-      .theme-text {
-        display: none;
-      }
-
       .lang-switch {
         top: 12px;
         right: 12px;
@@ -756,11 +703,6 @@
 <body>
   <div class="decoration decoration-1"></div>
   <div class="decoration decoration-2"></div>
-  
-  <div class="theme-toggle" onclick="toggleTheme()">
-    <span class="theme-icon" id="theme-icon">☀️</span>
-    <span class="theme-text" id="theme-text">Дневная тема</span>
-  </div>
 
   <div class="lang-switch">
     <button onclick="setLang('ru')" id="lang-ru" class="active">RU</button>
@@ -857,7 +799,7 @@
   </div>
 
   <script>
-    // Theme management
+    // Automatic theme management based on time
     function detectSystemTheme() {
       const hour = new Date().getHours();
       const isDark = hour >= 20 || hour < 6; // Dark theme from 8 PM to 6 AM
@@ -866,18 +808,9 @@
 
     function applyTheme(theme) {
       document.documentElement.setAttribute('data-theme', theme);
-      const icon = document.getElementById('theme-icon');
-      const text = document.getElementById('theme-text');
-      
-      if (theme === 'dark') {
-        icon.textContent = '🌙';
-        text.textContent = 'Ночная тема';
-      } else {
-        icon.textContent = '☀️';
-        text.textContent = 'Дневная тема';
-      }
     }
 
+    // Initialize theme
     let currentTheme = detectSystemTheme();
     applyTheme(currentTheme);
 
@@ -890,11 +823,6 @@
       }
     }, 60000);
 
-    function toggleTheme() {
-      currentTheme = currentTheme === 'dark' ? 'light' : 'dark';
-      applyTheme(currentTheme);
-    }
-
     // Telegram WebApp initialization
     Telegram.WebApp.ready();
     const user = Telegram.WebApp.initDataUnsafe?.user;
@@ -902,9 +830,10 @@
       document.getElementById('telegram_id').value = user.id;
     }
 
-    // Adapt to Telegram theme
+    // Adapt to Telegram theme if available
     if (Telegram.WebApp.colorScheme) {
-      applyTheme(Telegram.WebApp.colorScheme);
+      currentTheme = Telegram.WebApp.colorScheme;
+      applyTheme(currentTheme);
     }
 
     // Listen for theme changes from Telegram
