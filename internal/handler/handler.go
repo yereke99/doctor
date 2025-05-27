@@ -548,6 +548,8 @@ func (h *Handler) GetDoctorHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	fmt.Println("Doctor found: ", doctor)
+
 	// Prepare response
 	response := map[string]interface{}{
 		"id":          doctor.ID,
@@ -766,8 +768,16 @@ func (h *Handler) StartWebServer(botToken string, ctx context.Context, b *bot.Bo
 	http.Handle("/files/", http.StripPrefix("/files/", fileServer))
 
 	// Serve the update mini app
-	http.HandleFunc("/update", func(w http.ResponseWriter, r *http.Request) {
-		http.ServeFile(w, r, "update.html")
+	http.HandleFunc("/update-doctor", func(w http.ResponseWriter, r *http.Request) {
+		http.ServeFile(w, r, "./server/templates/update-doctor.html")
+	})
+
+	http.HandleFunc("/client", func(w http.ResponseWriter, r *http.Request) {
+		http.ServeFile(w, r, "./server/templates/client.html")
+	})
+
+	http.HandleFunc("/doctors", func(w http.ResponseWriter, r *http.Request) {
+		http.ServeFile(w, r, "./server/templates/doctor.html")
 	})
 
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
