@@ -3,7 +3,7 @@ package handler
 
 import (
 	"context"
-	"doctor/internal/domain"
+	"doctor/internal/repository"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -28,22 +28,19 @@ type docMsg struct {
 }
 
 type Handler struct {
-	registrations           map[int64]domain.DoctorRegistration
-	doctorsBySpecialty      map[string][]domain.DoctorRegistration
+	repo                    *repository.DoctorRepository
 	patientRequests         map[int64][]docMsg // userID → список сообщений врачам
 	patientReqMu            sync.Mutex
-	regMu                   sync.Mutex
 	specialtyMapping        map[string]string
 	reverseSpecialtyMapping map[string]string
 	logger                  *zap.Logger
 }
 
-// NewHandler инициализирует Handler с пустыми хранилищами и картами специальностей.
-func NewHandler(logger *zap.Logger) *Handler {
+// NewHandler инициализирует Handler с репозиторием и картами специальностей.
+func NewHandler(repo *repository.DoctorRepository, logger *zap.Logger) *Handler {
 	return &Handler{
-		registrations:      make(map[int64]domain.DoctorRegistration),
-		doctorsBySpecialty: make(map[string][]domain.DoctorRegistration),
-		patientRequests:    make(map[int64][]docMsg),
+		repo:            repo,
+		patientRequests: make(map[int64][]docMsg),
 		specialtyMapping: map[string]string{
 			"Терапевт":          "THERAPIST",
 			"Хирург":            "SURGEON",
@@ -93,22 +90,30 @@ func (h *Handler) InlineHandler(ctx context.Context, b *bot.Bot, callback *model
 		b.AnswerCallbackQuery(ctx, &bot.AnswerCallbackQueryParams{CallbackQueryID: callback.ID, Text: "Неверные данные"})
 		return
 	}
-	doctorID, err := strconv.ParseInt(parts[1], 10, 64)
+	doctorTelegramID, err := strconv.ParseInt(parts[1], 10, 64)
 	if err != nil {
 		b.AnswerCallbackQuery(ctx, &bot.AnswerCallbackQueryParams{CallbackQueryID: callback.ID, Text: "Ошибка обработки ID"})
 		return
 	}
-	h.regMu.Lock()
-	reg, ok := h.registrations[doctorID]
-	if ok {
-		delete(h.registrations, doctorID)
+
+	// Проверяем, есть ли доктор в БД
+	exists, err := h.repo.CheckDoctor(doctorTelegramID)
+	if err != nil {
+		h.logger.Error("Ошибка проверки доктора", zap.Error(err))
+		b.AnswerCallbackQuery(ctx, &bot.AnswerCallbackQueryParams{CallbackQueryID: callback.ID, Text: "Ошибка базы данных"})
+		return
 	}
-	h.regMu.Unlock()
-	if !ok {
+	if !exists {
 		b.AnswerCallbackQuery(ctx, &bot.AnswerCallbackQueryParams{CallbackQueryID: callback.ID, Text: "Регистрация не найдена"})
 		return
 	}
-	_, err = b.SendMessage(ctx, &bot.SendMessageParams{ChatID: reg.TelegramID, Text: "Ваша регистрация подтверждена. Вы теперь доктор! 😊"})
+
+	// Обновляем статус подтверждения (если у вас есть такое поле в БД)
+	// Для простоты пока просто отправляем уведомление
+	_, err = b.SendMessage(ctx, &bot.SendMessageParams{
+		ChatID: doctorTelegramID,
+		Text:   "Ваша регистрация подтверждена. Вы теперь доктор! 😊",
+	})
 	if err != nil {
 		h.logger.Warn("Ошибка отправки подтверждения доктору", zap.Error(err))
 	}
@@ -152,11 +157,23 @@ func (h *Handler) DoctorHandler(w http.ResponseWriter, r *http.Request, ctx cont
 		return
 	}
 
-	// Отправляем мгновенный ответ, чтобы фронт не ждал
+	// Проверяем, не зарегистрирован ли уже доктор
+	exists, err := h.repo.CheckDoctor(tid)
+	if err != nil {
+		h.logger.Error("Ошибка проверки доктора", zap.Error(err))
+		http.Error(w, "Ошибка базы данных", http.StatusInternalServerError)
+		return
+	}
+	if exists {
+		http.Error(w, "Доктор уже зарегистрирован", http.StatusConflict)
+		return
+	}
+
+	// Отправляем мгновенный ответ
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte("OK"))
 
-	// Фон: сохраняем файлы и шлём слайдер администраторам
+	// Фон: сохраняем файлы и регистрируем доктора
 	go func() {
 		avaDir, docsDir := "./ava", "./documents"
 		os.MkdirAll(avaDir, 0755)
@@ -177,6 +194,7 @@ func (h *Handler) DoctorHandler(w http.ResponseWriter, r *http.Request, ctx cont
 
 		var wg sync.WaitGroup
 		results := make(chan saveResult, len(files))
+		savedPaths := make(map[string]string)
 
 		for _, f := range files {
 			wg.Add(1)
@@ -208,13 +226,23 @@ func (h *Handler) DoctorHandler(w http.ResponseWriter, r *http.Request, ctx cont
 		wg.Wait()
 		close(results)
 
-		// собираем только успешные файлы
+		// Собираем успешные файлы и пути
 		var slides []slider.Slide
 		for res := range results {
 			if res.err != nil {
 				h.logger.Warn("Ошибка сохранения файла", zap.String("file", res.label), zap.Error(res.err))
 				continue
 			}
+			// Сохраняем пути
+			switch res.label {
+			case "Аватарка":
+				savedPaths["avatar"] = res.path
+			case "Диплом":
+				savedPaths["diploma"] = res.path
+			case "Сертификат":
+				savedPaths["certificate"] = res.path
+			}
+
 			data, err := os.ReadFile(res.path)
 			if err != nil {
 				h.logger.Warn("Ошибка чтения сохранённого файла", zap.String("path", res.path), zap.Error(err))
@@ -227,39 +255,39 @@ func (h *Handler) DoctorHandler(w http.ResponseWriter, r *http.Request, ctx cont
 			})
 		}
 
-		// Регистрируем врача в памяти
-		docID := time.Now().Unix()
-		reg := domain.DoctorRegistration{
-			ID:         docID,
-			FullName:   fullName,
-			Specialty:  specialty,
-			Contact:    contact,
-			TelegramID: tid,
-			AvatarPath: "", DiplomaPath: "", CertPath: "",
-		}
-		// Из результатов извлечём пути
-		for _, s := range slides {
-			switch s.Text {
-			case "Профиль фотосы":
-				reg.AvatarPath = s.Photo
-			case "Диплом":
-				reg.DiplomaPath = s.Photo
-			case "Сертификат":
-				reg.CertPath = s.Photo
-			}
+		// Сохраняем доктора в БД
+		now := time.Now()
+		avaPath := savedPaths["avatar"]
+		diplomaPath := savedPaths["diploma"]
+		certPath := savedPaths["certificate"]
+
+		doc := &repository.DoctorRegistration{
+			TelegramID:       tid,
+			FullName:         &fullName,
+			TypeOfSpecialist: &specialty,
+			Contact:          &contact,
+			AvatarPath:       &avaPath,
+			DiplomaPath:      &diplomaPath,
+			CertPath:         &certPath,
+			Time:             &now,
 		}
 
-		h.regMu.Lock()
-		h.registrations[docID] = reg
-		h.doctorsBySpecialty[specialty] = append(h.doctorsBySpecialty[specialty], reg)
-		h.regMu.Unlock()
+		if err := h.repo.Insert(doc); err != nil {
+			h.logger.Error("Ошибка сохранения доктора в БД", zap.Error(err))
+			// Уведомляем врача об ошибке
+			b.SendMessage(ctx, &bot.SendMessageParams{
+				ChatID: tid,
+				Text:   "Произошла ошибка при сохранении ваших данных. Пожалуйста, попробуйте снова.",
+			})
+			return
+		}
 
-		// Отправляем слайдер администраторам
+		// Отправляем слайдер администраторам для подтверждения
 		onSelect := func(ctx context.Context, b *bot.Bot, msg models.MaybeInaccessibleMessage, idx int) {
 			if msg.Message != nil {
 				b.SendMessage(ctx, &bot.SendMessageParams{
 					ChatID: msg.Message.Chat.ID,
-					Text:   fmt.Sprintf("Регистрация врача %s подтверждена ✅", reg.FullName),
+					Text:   fmt.Sprintf("Регистрация врача %s подтверждена ✅", fullName),
 				})
 			}
 		}
@@ -277,7 +305,7 @@ func (h *Handler) DoctorHandler(w http.ResponseWriter, r *http.Request, ctx cont
 	}()
 }
 
-// PatientAppointmentHandler обрабатывает заявки от пациентов (GET/POST).
+// PatientAppointmentHandler обрабатывает заявки от пациентов
 func (h *Handler) PatientAppointmentHandler(w http.ResponseWriter, r *http.Request, ctx context.Context, b *bot.Bot) {
 	// CORS & быстрый ответ
 	w.Header().Set("Access-Control-Allow-Origin", "*")
@@ -315,7 +343,7 @@ func (h *Handler) PatientAppointmentHandler(w http.ResponseWriter, r *http.Reque
 		}
 	}
 
-	// сразу возвращаем OK, чтобы клиент не ждал тяжёлой работы
+	// возвращаем OK
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte("OK"))
 
@@ -331,11 +359,10 @@ func (h *Handler) PatientAppointmentHandler(w http.ResponseWriter, r *http.Reque
 			path := filepath.Join(dir, fn)
 			if err := os.WriteFile(path, photoData, 0644); err != nil {
 				h.logger.Warn("Ошибка сохранения фото", zap.Error(err))
+			} else {
+				photoPath, fileName = path, fn
 			}
-			photoPath, fileName = path, fn
 		}
-
-		photoPath, fileName = "", ""
 
 		// 2) готовим текст сообщения
 		dispSpec := rawSpecialty
@@ -350,16 +377,27 @@ func (h *Handler) PatientAppointmentHandler(w http.ResponseWriter, r *http.Reque
 			dispSpec, contacts, address,
 		)
 
-		// 3) рассылаем врачам и сохраняем msgID
-		userID, _ := strconv.ParseInt(userIDStr, 10, 64)
-		var sent []docMsg
-		f, err := os.Open(photoPath)
+		// 3) получаем докторов по специальности из БД
+		doctors, err := h.repo.GetDoctorsBySpecialty(rawSpecialty)
 		if err != nil {
-			h.logger.Warn("Ошибка открытия файла", zap.Error(err))
+			h.logger.Error("Ошибка получения докторов", zap.Error(err))
 			return
 		}
-		defer f.Close()
-		for _, doc := range h.doctorsBySpecialty[rawSpecialty] {
+
+		// 4) рассылаем врачам
+		userID, _ := strconv.ParseInt(userIDStr, 10, 64)
+		var sent []docMsg
+		var f *os.File
+		if photoPath != "" {
+			f, err = os.Open(photoPath)
+			if err != nil {
+				h.logger.Warn("Ошибка открытия файла", zap.Error(err))
+			} else {
+				defer f.Close()
+			}
+		}
+
+		for _, doc := range doctors {
 			cb := fmt.Sprintf("delete_%d_%d", userID, doc.TelegramID)
 			markup := &models.InlineKeyboardMarkup{
 				InlineKeyboard: [][]models.InlineKeyboardButton{{
@@ -367,7 +405,8 @@ func (h *Handler) PatientAppointmentHandler(w http.ResponseWriter, r *http.Reque
 				}},
 			}
 
-			if photoPath != "" && fileName != "" {
+			if f != nil {
+				f.Seek(0, 0) // Перематываем файл в начало для каждой отправки
 				msg, err := b.SendPhoto(ctx, &bot.SendPhotoParams{
 					ChatID: doc.TelegramID,
 					Photo: &models.InputFileUpload{
@@ -394,7 +433,6 @@ func (h *Handler) PatientAppointmentHandler(w http.ResponseWriter, r *http.Reque
 					h.logger.Warn("Ошибка отправки врачу", zap.Error(err))
 				}
 			}
-
 		}
 
 		// сохраняем для DeleteMessageHandler
@@ -402,13 +440,13 @@ func (h *Handler) PatientAppointmentHandler(w http.ResponseWriter, r *http.Reque
 		h.patientRequests[userID] = sent
 		h.patientReqMu.Unlock()
 
-		// 4) отправляем в общий чат
+		// 5) отправляем в общий чат
 		groupID := int64(-1009876543210)
 		b.SendMessage(ctx, &bot.SendMessageParams{ChatID: groupID, Text: msgText})
 	}()
 }
 
-// DeleteMessageHandler — удаляет заявки у других врачей при первом нажатии
+// DeleteMessageHandler удаляет заявки у других врачей при первом нажатии
 func (h *Handler) DeleteMessageHandler(ctx context.Context, b *bot.Bot, update *models.Update) {
 	parts := strings.Split(update.CallbackQuery.Data, "_")
 	if len(parts) != 3 {
@@ -496,41 +534,38 @@ func (h *Handler) GetDoctorHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	doctorIDStr := pathParts[2]
-	doctorID, err := strconv.ParseInt(doctorIDStr, 10, 64)
+	doctorTelegramID, err := strconv.ParseInt(doctorIDStr, 10, 64)
 	if err != nil {
 		http.Error(w, "Invalid doctor ID format", http.StatusBadRequest)
 		return
 	}
 
-	// Find doctor by Telegram ID
-	h.regMu.Lock()
-	var foundDoctor *domain.DoctorRegistration
-	for _, doc := range h.registrations {
-		if doc.TelegramID == doctorID {
-			foundDoctor = &doc
-			break
-		}
-	}
-	h.regMu.Unlock()
-
-	if foundDoctor == nil {
+	// Get doctor from DB
+	doctor, err := h.repo.GetDoctorByTelegramID(doctorTelegramID)
+	if err != nil {
+		h.logger.Error("Ошибка получения доктора", zap.Error(err))
 		http.Error(w, "Doctor not found", http.StatusNotFound)
 		return
 	}
 
 	// Prepare response
 	response := map[string]interface{}{
-		"id":          foundDoctor.ID,
-		"full_name":   foundDoctor.FullName,
-		"specialty":   foundDoctor.Specialty,
-		"contact":     foundDoctor.Contact,
-		"telegram_id": foundDoctor.TelegramID,
+		"id":          doctor.ID,
+		"telegram_id": doctor.TelegramID,
 	}
 
-	// Add avatar URL if available
-	if foundDoctor.AvatarPath != "" {
-		// Convert local path to URL (adjust based on your file serving setup)
-		response["avatar_url"] = fmt.Sprintf("/files/ava/%s", filepath.Base(foundDoctor.AvatarPath))
+	// Add non-nil fields
+	if doctor.FullName != nil {
+		response["full_name"] = *doctor.FullName
+	}
+	if doctor.TypeOfSpecialist != nil {
+		response["specialty"] = *doctor.TypeOfSpecialist
+	}
+	if doctor.Contact != nil {
+		response["contact"] = *doctor.Contact
+	}
+	if doctor.AvatarPath != nil && *doctor.AvatarPath != "" {
+		response["avatar_url"] = fmt.Sprintf("/files/ava/%s", filepath.Base(*doctor.AvatarPath))
 	}
 
 	// Send JSON response
@@ -577,69 +612,106 @@ func (h *Handler) UpdateDoctorHandler(w http.ResponseWriter, r *http.Request, ct
 		return
 	}
 
+	// Check if doctor exists
+	exists, err := h.repo.CheckDoctor(telegramID)
+	if err != nil {
+		h.logger.Error("Ошибка проверки доктора", zap.Error(err))
+		http.Error(w, "Database error", http.StatusInternalServerError)
+		return
+	}
+	if !exists {
+		http.Error(w, "Doctor not found", http.StatusNotFound)
+		return
+	}
+
 	// Validate required fields
 	if fullName == "" || specialty == "" || contact == "" {
 		http.Error(w, "Missing required fields", http.StatusBadRequest)
 		return
 	}
 
-	// Find and update doctor
-	h.regMu.Lock()
-	var updatedDoctor *domain.DoctorRegistration
-	var oldSpecialty string
+	// Handle avatar upload if provided
+	var avatarPath *string
+	if file, header, err := r.FormFile("avatar"); err == nil {
+		defer file.Close()
 
-	// Find doctor by Telegram ID
-	for id, doc := range h.registrations {
-		if doc.TelegramID == telegramID {
-			oldSpecialty = doc.Specialty
-
-			// Update doctor data
-			doc.FullName = fullName
-			doc.Specialty = specialty
-			doc.Contact = contact
-
-			// Save back to map
-			h.registrations[id] = doc
-			updatedDoctor = &doc
-			break
-		}
-	}
-
-	// Update specialty mapping if specialty changed
-	if updatedDoctor != nil && oldSpecialty != specialty {
-		// Remove from old specialty list
-		if doctors, ok := h.doctorsBySpecialty[oldSpecialty]; ok {
-			newDoctors := make([]domain.DoctorRegistration, 0, len(doctors))
-			for _, d := range doctors {
-				if d.TelegramID != telegramID {
-					newDoctors = append(newDoctors, d)
-				}
-			}
-			h.doctorsBySpecialty[oldSpecialty] = newDoctors
+		// Create avatar directory if not exists
+		avaDir := "./ava"
+		if err := os.MkdirAll(avaDir, 0755); err != nil {
+			h.logger.Error("Failed to create avatar directory", zap.Error(err))
+			http.Error(w, "Failed to save avatar", http.StatusInternalServerError)
+			return
 		}
 
-		// Add to new specialty list
-		h.doctorsBySpecialty[specialty] = append(h.doctorsBySpecialty[specialty], *updatedDoctor)
-	}
-	h.regMu.Unlock()
+		// Generate unique filename
+		filename := fmt.Sprintf("%d_%s", time.Now().UnixNano(), header.Filename)
+		fullPath := filepath.Join(avaDir, filename)
 
-	if updatedDoctor == nil {
-		http.Error(w, "Doctor not found", http.StatusNotFound)
+		// Save file
+		out, err := os.Create(fullPath)
+		if err != nil {
+			h.logger.Error("Failed to create avatar file", zap.Error(err))
+			http.Error(w, "Failed to save avatar", http.StatusInternalServerError)
+			return
+		}
+		defer out.Close()
+
+		if _, err := io.Copy(out, file); err != nil {
+			h.logger.Error("Failed to copy avatar data", zap.Error(err))
+			http.Error(w, "Failed to save avatar", http.StatusInternalServerError)
+			return
+		}
+
+		avatarPath = &fullPath
+	}
+
+	// Prepare update
+	now := time.Now()
+	updateDoc := &repository.DoctorRegistration{
+		TelegramID:       telegramID,
+		FullName:         &fullName,
+		TypeOfSpecialist: &specialty,
+		Contact:          &contact,
+		Time:             &now,
+	}
+
+	// Only update avatar if new one was uploaded
+	if avatarPath != nil {
+		updateDoc.AvatarPath = avatarPath
+	}
+
+	// Update in DB
+	if err := h.repo.UpdateDoctor(updateDoc); err != nil {
+		h.logger.Error("Ошибка обновления доктора", zap.Error(err))
+		http.Error(w, "Failed to update doctor", http.StatusInternalServerError)
+		return
+	}
+
+	// Get updated doctor data
+	updatedDoctor, err := h.repo.GetDoctorByTelegramID(telegramID)
+	if err != nil {
+		h.logger.Error("Ошибка получения обновленного доктора", zap.Error(err))
+		http.Error(w, "Failed to retrieve updated data", http.StatusInternalServerError)
 		return
 	}
 
 	// Prepare response
 	response := map[string]interface{}{
 		"id":          updatedDoctor.ID,
-		"full_name":   updatedDoctor.FullName,
-		"specialty":   updatedDoctor.Specialty,
-		"contact":     updatedDoctor.Contact,
 		"telegram_id": updatedDoctor.TelegramID,
 	}
 
-	// Add avatar URL if available
-	if updatedDoctor.AvatarPath != "" {
-		response["avatar_url"] = fmt.Sprintf("/files/ava/%s", filepath.Base(updatedDoctor.AvatarPath))
+	if updatedDoctor.FullName != nil {
+		response["full_name"] = *updatedDoctor.FullName
+	}
+	if updatedDoctor.TypeOfSpecialist != nil {
+		response["specialty"] = *updatedDoctor.TypeOfSpecialist
+	}
+	if updatedDoctor.Contact != nil {
+		response["contact"] = *updatedDoctor.Contact
+	}
+	if updatedDoctor.AvatarPath != nil && *updatedDoctor.AvatarPath != "" {
+		response["avatar_url"] = fmt.Sprintf("/files/ava/%s", filepath.Base(*updatedDoctor.AvatarPath))
 	}
 
 	// Send success notification to doctor
@@ -661,7 +733,7 @@ func (h *Handler) UpdateDoctorHandler(w http.ResponseWriter, r *http.Request, ct
 	}
 }
 
-// Update the StartWebServer method to include new routes
+// StartWebServer starts the HTTP server with all routes
 func (h *Handler) StartWebServer(botToken string, ctx context.Context, b *bot.Bot) {
 	// Existing routes
 	http.HandleFunc("/doctor", func(w http.ResponseWriter, r *http.Request) {
@@ -680,7 +752,7 @@ func (h *Handler) StartWebServer(botToken string, ctx context.Context, b *bot.Bo
 		}
 	})
 
-	// New route for getting doctor data
+	// Route for getting doctor data
 	http.HandleFunc("/doctor/", func(w http.ResponseWriter, r *http.Request) {
 		h.GetDoctorHandler(w, r)
 	})
@@ -695,7 +767,7 @@ func (h *Handler) StartWebServer(botToken string, ctx context.Context, b *bot.Bo
 
 	// Serve the update mini app
 	http.HandleFunc("/update", func(w http.ResponseWriter, r *http.Request) {
-		http.ServeFile(w, r, "update.html") // You'll need to save the HTML as update.html
+		http.ServeFile(w, r, "update.html")
 	})
 
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
@@ -706,6 +778,3 @@ func (h *Handler) StartWebServer(botToken string, ctx context.Context, b *bot.Bo
 	h.logger.Info("веб-сервер запущен", zap.String("addr", addr))
 	log.Fatal(http.ListenAndServe(addr, nil))
 }
-
-// Add this import to your imports section:
-// "encoding/json"
