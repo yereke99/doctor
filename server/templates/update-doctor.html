@@ -20,6 +20,7 @@
       --accent-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
       --success-gradient: linear-gradient(135deg, #48bb78 0%, #38a169 100%);
       --warning-gradient: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+      --danger-gradient: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
       --input-bg: #f7fafc;
       --input-border: #e2e8f0;
       --input-focus: #667eea;
@@ -50,6 +51,7 @@
       --accent-gradient: linear-gradient(135deg, #818cf8 0%, #6366f1 100%);
       --success-gradient: linear-gradient(135deg, #34d399 0%, #10b981 100%);
       --warning-gradient: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
+      --danger-gradient: linear-gradient(135deg, #f87171 0%, #ef4444 100%);
       --input-bg: #1e293b;
       --input-border: #334155;
       --input-focus: #818cf8;
@@ -283,6 +285,52 @@
       display: block;
     }
 
+    /* Documents section */
+    .documents-section {
+      margin-top: 24px;
+      padding-top: 24px;
+      border-top: 1px solid var(--input-border);
+    }
+
+    .document-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 0;
+    }
+
+    .document-label {
+      font-weight: 600;
+      color: var(--text-secondary);
+      font-size: 0.9rem;
+    }
+
+    .document-status {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .status-icon {
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.8rem;
+    }
+
+    .status-icon.uploaded {
+      background: var(--success-gradient);
+      color: white;
+    }
+
+    .status-icon.missing {
+      background: var(--input-border);
+      color: var(--text-muted);
+    }
+
     .btn {
       display: inline-flex;
       align-items: center;
@@ -420,6 +468,57 @@
     input::placeholder {
       color: var(--text-muted);
       font-weight: 400;
+    }
+
+    /* File input styling */
+    .file-input-wrapper {
+      position: relative;
+      overflow: hidden;
+      display: inline-block;
+      width: 100%;
+    }
+
+    .file-input-wrapper input[type="file"] {
+      position: absolute;
+      left: -9999px;
+    }
+
+    .file-input-label {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 14px 18px;
+      background: var(--input-bg);
+      border: 2px dashed var(--input-border);
+      border-radius: 12px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      font-weight: 500;
+      color: var(--text-secondary);
+    }
+
+    .file-input-label:hover {
+      border-color: var(--accent-primary);
+      background: var(--card-bg);
+    }
+
+    .file-input-label.has-file {
+      border-style: solid;
+      border-color: var(--accent-secondary);
+      color: var(--accent-secondary);
+    }
+
+    /* Avatar preview in edit mode */
+    .avatar-preview {
+      width: 80px;
+      height: 80px;
+      border-radius: 50%;
+      object-fit: cover;
+      margin: 0 auto 16px;
+      display: block;
+      box-shadow: var(--shadow-md);
+      border: 2px solid var(--accent-primary);
     }
 
     select {
@@ -611,6 +710,23 @@
           <div class="info-label" id="label-contact">Контакт:</div>
           <div class="info-value" id="displayContact"></div>
         </div>
+        
+        <div class="documents-section">
+          <div class="document-item">
+            <span class="document-label" id="label-diploma">Диплом:</span>
+            <div class="document-status">
+              <span class="status-icon" id="diplomaStatus"></span>
+              <span id="diplomaStatusText"></span>
+            </div>
+          </div>
+          <div class="document-item">
+            <span class="document-label" id="label-certificate">Сертификат:</span>
+            <div class="document-status">
+              <span class="status-icon" id="certificateStatus"></span>
+              <span id="certificateStatusText"></span>
+            </div>
+          </div>
+        </div>
       </div>
       <button id="editBtn" class="btn btn-edit" onclick="enterEditMode()">
         <span>✏️</span>
@@ -619,6 +735,22 @@
     </div>
 
     <form id="editForm" style="display: none;">
+      <img id="avatarPreview" class="avatar-preview" src="" alt="Avatar preview">
+      
+      <div class="form-group">
+        <label for="avatar">
+          <span class="emoji">📷</span>
+          <span id="label-form-avatar">Фото профиля</span>
+        </label>
+        <div class="file-input-wrapper">
+          <input type="file" id="avatar" name="avatar" accept="image/*" onchange="handleFileSelect(event, 'avatar')">
+          <label for="avatar" class="file-input-label" id="avatarLabel">
+            <span>📁</span>
+            <span id="avatar-choose-text">Выбрать фото</span>
+          </label>
+        </div>
+      </div>
+
       <div class="form-group">
         <label for="full_name">
           <span class="emoji">👤</span>
@@ -626,6 +758,7 @@
         </label>
         <input type="text" id="full_name" name="full_name" required>
       </div>
+      
       <div class="form-group">
         <label for="specialty">
           <span class="emoji">⚕️</span>
@@ -645,6 +778,7 @@
           <option value="Капельница к медперсоналу">Капельница к медперсоналу</option>
         </select>
       </div>
+      
       <div class="form-group">
         <label for="contact">
           <span class="emoji">📱</span>
@@ -652,6 +786,35 @@
         </label>
         <input type="tel" id="contact" name="contact" placeholder="+7 (___) ___-__-__" required>
       </div>
+
+      <div class="form-group">
+        <label for="diploma">
+          <span class="emoji">🎓</span>
+          <span id="label-form-diploma">Диплом</span>
+        </label>
+        <div class="file-input-wrapper">
+          <input type="file" id="diploma" name="diploma" accept="image/*,.pdf" onchange="handleFileSelect(event, 'diploma')">
+          <label for="diploma" class="file-input-label" id="diplomaLabel">
+            <span>📁</span>
+            <span id="diploma-choose-text">Выбрать файл</span>
+          </label>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label for="certificate">
+          <span class="emoji">📜</span>
+          <span id="label-form-certificate">Сертификат</span>
+        </label>
+        <div class="file-input-wrapper">
+          <input type="file" id="certificate" name="certificate" accept="image/*,.pdf" onchange="handleFileSelect(event, 'certificate')">
+          <label for="certificate" class="file-input-label" id="certificateLabel">
+            <span>📁</span>
+            <span id="certificate-choose-text">Выбрать файл</span>
+          </label>
+        </div>
+      </div>
+
       <button type="button" class="btn btn-save" onclick="saveData()">
         <span>💾</span>
         <span id="btn-save-text">Сохранить</span>
@@ -673,13 +836,24 @@
         'label-name': 'ФИО:',
         'label-specialty': 'Специальность:',
         'label-contact': 'Контакт:',
+        'label-diploma': 'Диплом:',
+        'label-certificate': 'Сертификат:',
         'label-form-name': 'ФИО',
         'label-form-specialty': 'Специальность',
         'label-form-contact': 'Контактный номер',
+        'label-form-avatar': 'Фото профиля',
+        'label-form-diploma': 'Диплом',
+        'label-form-certificate': 'Сертификат',
         'btn-edit-text': 'Редактировать',
         'btn-save-text': 'Сохранить',
         'btn-cancel-text': 'Отмена',
         'select-specialty': 'Выберите специальность',
+        'avatar-choose-text': 'Выбрать фото',
+        'diploma-choose-text': 'Выбрать файл',
+        'certificate-choose-text': 'Выбрать файл',
+        'file-selected': 'Файл выбран',
+        'uploaded': 'Загружен',
+        'not-uploaded': 'Не загружен',
         specialties: {
           'Терапевт': 'Терапевт',
           'Хирург': 'Хирург',
@@ -701,13 +875,24 @@
         'label-name': 'Аты-жөні:',
         'label-specialty': 'Мамандығы:',
         'label-contact': 'Байланыс:',
+        'label-diploma': 'Диплом:',
+        'label-certificate': 'Сертификат:',
         'label-form-name': 'Аты-жөні',
         'label-form-specialty': 'Мамандығы',
         'label-form-contact': 'Байланыс нөмірі',
+        'label-form-avatar': 'Профиль суреті',
+        'label-form-diploma': 'Диплом',
+        'label-form-certificate': 'Сертификат',
         'btn-edit-text': 'Өңдеу',
         'btn-save-text': 'Сақтау',
         'btn-cancel-text': 'Бас тарту',
         'select-specialty': 'Мамандықты таңдаңыз',
+        'avatar-choose-text': 'Суретті таңдау',
+        'diploma-choose-text': 'Файлды таңдау',
+        'certificate-choose-text': 'Файлды таңдау',
+        'file-selected': 'Файл таңдалды',
+        'uploaded': 'Жүктелді',
+        'not-uploaded': 'Жүктелмеді',
         specialties: {
           'Терапевт': 'Терапевт',
           'Хирург': 'Хирург',
@@ -797,12 +982,16 @@
         if (key.startsWith('label-') || key.startsWith('btn-')) {
           const element = document.getElementById(key);
           if (element) {
-            if (element.tagName === 'SPAN') {
-              element.textContent = t[key];
-            } else {
-              element.textContent = t[key];
-            }
+            element.textContent = t[key];
           }
+        }
+      });
+
+      // Update file input texts
+      ['avatar', 'diploma', 'certificate'].forEach(field => {
+        const textEl = document.getElementById(field + '-choose-text');
+        if (textEl) {
+          textEl.textContent = t[field + '-choose-text'];
         }
       });
 
@@ -813,6 +1002,9 @@
           displaySpecialty.textContent = t.specialties[doctorData.specialty] || doctorData.specialty;
         }
       }
+
+      // Update document statuses
+      updateDocumentStatuses();
     }
 
     function updateSpecialtyOptions() {
@@ -856,6 +1048,50 @@
       setTimeout(() => hideElement('success'), 3000);
     }
 
+    // Get base URL based on current location
+    function getBaseUrl() {
+      const currentHost = window.location.hostname;
+      const currentPort = window.location.port;
+      
+      let baseUrl = window.location.protocol + '//' + currentHost;
+      if (currentPort) {
+        baseUrl += ':' + currentPort;
+      }
+      
+      return baseUrl;
+    }
+
+    // Update document statuses
+    function updateDocumentStatuses() {
+      const t = translations[currentLang];
+      
+      // Diploma status
+      const diplomaStatus = document.getElementById('diplomaStatus');
+      const diplomaStatusText = document.getElementById('diplomaStatusText');
+      if (doctorData && doctorData.diploma_url) {
+        diplomaStatus.className = 'status-icon uploaded';
+        diplomaStatus.textContent = '✓';
+        diplomaStatusText.textContent = t.uploaded;
+      } else {
+        diplomaStatus.className = 'status-icon missing';
+        diplomaStatus.textContent = '−';
+        diplomaStatusText.textContent = t['not-uploaded'];
+      }
+
+      // Certificate status
+      const certStatus = document.getElementById('certificateStatus');
+      const certStatusText = document.getElementById('certificateStatusText');
+      if (doctorData && doctorData.certificate_url) {
+        certStatus.className = 'status-icon uploaded';
+        certStatus.textContent = '✓';
+        certStatusText.textContent = t.uploaded;
+      } else {
+        certStatus.className = 'status-icon missing';
+        certStatus.textContent = '−';
+        certStatusText.textContent = t['not-uploaded'];
+      }
+    }
+
     // Fetch doctor data
     async function fetchDoctorData() {
       if (!doctorId) {
@@ -865,9 +1101,9 @@
       }
 
       try {
-        const response = await fetch(`https://4aca477db6a21dabf398441626e716d0.serveo.net/doctor/${doctorId}`, {
+        const baseUrl = getBaseUrl();
+        const response = await fetch(`${baseUrl}/doctor/${doctorId}`, {
           method: 'GET',
-          mode: 'cors',
           headers: {
             'Accept': 'application/json'
           }
@@ -891,11 +1127,16 @@
     function displayDoctorData() {
       if (!doctorData) return;
 
+      const baseUrl = getBaseUrl();
+
       // Update avatar
       if (doctorData.avatar_url) {
-        document.getElementById('avatarDisplay').src = doctorData.avatar_url;
+        document.getElementById('avatarDisplay').src = baseUrl + doctorData.avatar_url;
+        document.getElementById('avatarPreview').src = baseUrl + doctorData.avatar_url;
       } else {
-        document.getElementById('avatarDisplay').src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100"%3E%3Ccircle cx="50" cy="50" r="50" fill="%23667eea"/%3E%3Ctext x="50" y="50" text-anchor="middle" dy=".3em" fill="white" font-size="40" font-family="Arial"%3E👨‍⚕️%3C/text%3E%3C/svg%3E';
+        const defaultAvatar = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100"%3E%3Ccircle cx="50" cy="50" r="50" fill="%23667eea"/%3E%3Ctext x="50" y="50" text-anchor="middle" dy=".3em" fill="white" font-size="40" font-family="Arial"%3E👨‍⚕️%3C/text%3E%3C/svg%3E';
+        document.getElementById('avatarDisplay').src = defaultAvatar;
+        document.getElementById('avatarPreview').src = defaultAvatar;
       }
 
       // Update display fields
@@ -903,7 +1144,34 @@
       document.getElementById('displaySpecialty').textContent = translations[currentLang].specialties[doctorData.specialty] || doctorData.specialty || '';
       document.getElementById('displayContact').textContent = doctorData.contact || '';
 
+      // Update document statuses
+      updateDocumentStatuses();
+
       showElement('viewMode');
+    }
+
+    // Handle file selection
+    function handleFileSelect(event, fieldName) {
+      const file = event.target.files[0];
+      const label = document.getElementById(fieldName + 'Label');
+      const textEl = document.getElementById(fieldName + '-choose-text');
+      
+      if (file) {
+        label.classList.add('has-file');
+        textEl.textContent = translations[currentLang]['file-selected'];
+        
+        // Preview avatar
+        if (fieldName === 'avatar' && file.type.startsWith('image/')) {
+          const reader = new FileReader();
+          reader.onload = function(e) {
+            document.getElementById('avatarPreview').src = e.target.result;
+          };
+          reader.readAsDataURL(file);
+        }
+      } else {
+        label.classList.remove('has-file');
+        textEl.textContent = translations[currentLang][fieldName + '-choose-text'];
+      }
     }
 
     // Enter edit mode
@@ -914,6 +1182,19 @@
       document.getElementById('full_name').value = doctorData.full_name || '';
       document.getElementById('specialty').value = doctorData.specialty || '';
       document.getElementById('contact').value = doctorData.contact || '';
+
+      // Reset file inputs
+      document.getElementById('avatar').value = '';
+      document.getElementById('diploma').value = '';
+      document.getElementById('certificate').value = '';
+      
+      // Reset file labels
+      ['avatar', 'diploma', 'certificate'].forEach(field => {
+        const label = document.getElementById(field + 'Label');
+        const textEl = document.getElementById(field + '-choose-text');
+        label.classList.remove('has-file');
+        textEl.textContent = translations[currentLang][field + '-choose-text'];
+      });
 
       updateSpecialtyOptions();
 
@@ -955,9 +1236,9 @@
       saveBtn.disabled = true;
 
       try {
-        const response = await fetch(`https://ef7737ba86474923176837b49be266ec.serveo.net/doctor`, {
+        const baseUrl = getBaseUrl();
+        const response = await fetch(`${baseUrl}/doctor`, {
           method: 'PUT',
-          mode: 'cors',
           body: formData
         });
 

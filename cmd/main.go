@@ -65,8 +65,9 @@ func main() {
 	}
 
 	doctorRepo := repository.NewDoctorRepository(db)
+	redisRepo := repository.NewRedisRepository("localhost:6379", "", 0)
 
-	h := handler.NewHandler(doctorRepo, zapLogger)
+	h := handler.NewHandler(doctorRepo, redisRepo, zapLogger, cfg)
 
 	opts := []bot.Option{
 		bot.WithDefaultHandler(h.DefaultHandler),

@@ -2,7 +2,10 @@ package config
 
 // Config содержит параметры конфигурации приложения.
 type Config struct {
+	Port                          string `json:"port"`
 	Token                         string `json:"token"` // Токен для Telegram бота
+	AvaDir                        string `json:"avaDir"`
+	DocsDir                       string `json:"docsDir"`
 	AdminID                       int64
 	RedisAddr                     string `json:"redis_addr"`     // Адрес Redis
 	RedisPassword                 string `json:"redis_password"` // Пароль для Redis
@@ -19,7 +22,10 @@ type Config struct {
 // NewConfig создаёт и возвращает новый экземпляр конфигурации.
 func NewConfig() (*Config, error) {
 	cfg := &Config{
+		Port:                          ":8080",
 		Token:                         "8104980731:AAEN8KGxAwwfmPWa3s2yiPO7_EP-Cq2wbco",
+		AvaDir:                        "./ava",
+		DocsDir:                       "./documents",
 		AdminID:                       800703982,
 		RedisAddr:                     "localhost:6379",
 		RedisPassword:                 "",

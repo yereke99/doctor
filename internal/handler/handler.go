@@ -3,6 +3,7 @@ package handler
 
 import (
 	"context"
+	"doctor/config"
 	"doctor/internal/repository"
 	"encoding/json"
 	"fmt"
@@ -22,25 +23,20 @@ import (
 	"go.uber.org/zap"
 )
 
-type docMsg struct {
-	chatID int64
-	msgID  int
-}
-
 type Handler struct {
 	repo                    *repository.DoctorRepository
-	patientRequests         map[int64][]docMsg // userID → список сообщений врачам
-	patientReqMu            sync.Mutex
+	redisRepo               *repository.RedisRepository
 	specialtyMapping        map[string]string
 	reverseSpecialtyMapping map[string]string
 	logger                  *zap.Logger
+	cfg                     *config.Config
 }
 
 // NewHandler инициализирует Handler с репозиторием и картами специальностей.
-func NewHandler(repo *repository.DoctorRepository, logger *zap.Logger) *Handler {
+func NewHandler(repo *repository.DoctorRepository, redisRepo *repository.RedisRepository, logger *zap.Logger, cfg *config.Config) *Handler {
 	return &Handler{
-		repo:            repo,
-		patientRequests: make(map[int64][]docMsg),
+		repo:      repo,
+		redisRepo: redisRepo,
 		specialtyMapping: map[string]string{
 			"Терапевт":          "THERAPIST",
 			"Хирург":            "SURGEON",
@@ -66,6 +62,7 @@ func NewHandler(repo *repository.DoctorRepository, logger *zap.Logger) *Handler 
 			"IV_DRIP":      "Капельница к медперсоналу",
 		},
 		logger: logger,
+		cfg:    cfg,
 	}
 }
 
@@ -222,7 +219,6 @@ func (h *Handler) DoctorHandler(w http.ResponseWriter, r *http.Request, ctx cont
 				results <- saveResult{label, path, nil}
 			}(f.field, f.label, f.dst)
 		}
-
 		wg.Wait()
 		close(results)
 
@@ -235,7 +231,7 @@ func (h *Handler) DoctorHandler(w http.ResponseWriter, r *http.Request, ctx cont
 			}
 			// Сохраняем пути
 			switch res.label {
-			case "Аватарка":
+			case "Профиль фотосы":
 				savedPaths["avatar"] = res.path
 			case "Диплом":
 				savedPaths["diploma"] = res.path
@@ -386,7 +382,6 @@ func (h *Handler) PatientAppointmentHandler(w http.ResponseWriter, r *http.Reque
 
 		// 4) рассылаем врачам
 		userID, _ := strconv.ParseInt(userIDStr, 10, 64)
-		var sent []docMsg
 		var f *os.File
 		if photoPath != "" {
 			f, err = os.Open(photoPath)
@@ -405,6 +400,7 @@ func (h *Handler) PatientAppointmentHandler(w http.ResponseWriter, r *http.Reque
 				}},
 			}
 
+			var msgID int
 			if f != nil {
 				f.Seek(0, 0) // Перематываем файл в начало для каждой отправки
 				msg, err := b.SendPhoto(ctx, &bot.SendPhotoParams{
@@ -417,9 +413,10 @@ func (h *Handler) PatientAppointmentHandler(w http.ResponseWriter, r *http.Reque
 					ReplyMarkup: markup,
 				})
 				if err == nil {
-					sent = append(sent, docMsg{chatID: doc.TelegramID, msgID: msg.ID})
+					msg.ID = msgID
 				} else {
 					h.logger.Warn("Ошибка отправки врачу", zap.Error(err))
+					continue
 				}
 			} else {
 				msg, err := b.SendMessage(ctx, &bot.SendMessageParams{
@@ -428,17 +425,21 @@ func (h *Handler) PatientAppointmentHandler(w http.ResponseWriter, r *http.Reque
 					ReplyMarkup: markup,
 				})
 				if err == nil {
-					sent = append(sent, docMsg{chatID: doc.TelegramID, msgID: msg.ID})
+					msg.ID = msgID
 				} else {
 					h.logger.Warn("Ошибка отправки врачу", zap.Error(err))
+					continue
 				}
 			}
-		}
+			docMsg := repository.DocMsg{
+				ChatID: doc.TelegramID,
+				MsgID:  msgID,
+			}
 
-		// сохраняем для DeleteMessageHandler
-		h.patientReqMu.Lock()
-		h.patientRequests[userID] = sent
-		h.patientReqMu.Unlock()
+			if err := h.redisRepo.AddDocMsg(userID, docMsg); err != nil {
+				h.logger.Error("Ошибка сохранения в Redis", zap.Error(err), zap.Int64("userID", userID))
+			}
+		}
 
 		// 5) отправляем в общий чат
 		groupID := int64(-1009876543210)
@@ -466,20 +467,37 @@ func (h *Handler) DeleteMessageHandler(ctx context.Context, b *bot.Bot, update *
 		return
 	}
 
-	// получаем и удаляем список сообщений
-	h.patientReqMu.Lock()
-	msgs := h.patientRequests[userID]
-	delete(h.patientRequests, userID)
-	h.patientReqMu.Unlock()
+	msgs, err := h.redisRepo.GetDocMsgs(userID)
+	if err != nil {
+		h.logger.Error("Ошибка получения сообщений из Redis", zap.Error(err), zap.Int64("userID", userID))
+		b.AnswerCallbackQuery(ctx, &bot.AnswerCallbackQueryParams{
+			CallbackQueryID: update.CallbackQuery.ID,
+			Text:            "Ошибка обработки",
+		})
+		return
+	}
 
-	// удаляем у всех, кроме того, кто нажал
 	for _, dm := range msgs {
-		if dm.chatID != docChatID {
-			b.DeleteMessage(ctx, &bot.DeleteMessageParams{
-				ChatID:    dm.chatID,
-				MessageID: dm.msgID,
-			})
+		if dm.ChatID != docChatID {
+			if _, err := b.DeleteMessage(ctx, &bot.DeleteMessageParams{
+				ChatID:    dm.ChatID,
+				MessageID: dm.MsgID,
+			}); err != nil {
+				h.logger.Warn("Ошибка удаления сообщения",
+					zap.Error(err),
+					zap.Int64("chatID", dm.ChatID),
+					zap.Int("msgID", dm.MsgID))
+			}
 		}
+	}
+
+	if err := h.redisRepo.DeleteDocMsgs(userID); err != nil {
+		h.logger.Error("Ошибка удаления из Redis", zap.Error(err), zap.Int64("userID", userID))
+		b.AnswerCallbackQuery(ctx, &bot.AnswerCallbackQueryParams{
+			CallbackQueryID: update.CallbackQuery.ID,
+			Text:            "Ошибка обработки",
+		})
+		return
 	}
 
 	// удаляем собственное приглашение
@@ -548,7 +566,7 @@ func (h *Handler) GetDoctorHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	fmt.Println("Doctor found: ", doctor)
+	h.logger.Info("Doctor found", zap.Any("doctor", doctor))
 
 	// Prepare response
 	response := map[string]interface{}{
@@ -568,6 +586,12 @@ func (h *Handler) GetDoctorHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	if doctor.AvatarPath != nil && *doctor.AvatarPath != "" {
 		response["avatar_url"] = fmt.Sprintf("/files/ava/%s", filepath.Base(*doctor.AvatarPath))
+	}
+	if doctor.DiplomaPath != nil && *doctor.DiplomaPath != "" {
+		response["diploma_url"] = fmt.Sprintf("/files/documents/%s", filepath.Base(*doctor.DiplomaPath))
+	}
+	if doctor.CertPath != nil && *doctor.CertPath != "" {
+		response["certificate_url"] = fmt.Sprintf("/files/documents/%s", filepath.Base(*doctor.CertPath))
 	}
 
 	// Send JSON response
@@ -632,18 +656,22 @@ func (h *Handler) UpdateDoctorHandler(w http.ResponseWriter, r *http.Request, ct
 		return
 	}
 
-	// Handle avatar upload if provided
-	var avatarPath *string
+	// Create directories if not exists
+	avaDir := "./ava"
+	docsDir := "./documents"
+	if err := os.MkdirAll(avaDir, 0755); err != nil {
+		h.logger.Error("Failed to create avatar directory", zap.Error(err))
+	}
+	if err := os.MkdirAll(docsDir, 0755); err != nil {
+		h.logger.Error("Failed to create documents directory", zap.Error(err))
+	}
+
+	// Handle file uploads
+	var avatarPath, diplomaPath, certPath *string
+
+	// Handle avatar upload
 	if file, header, err := r.FormFile("avatar"); err == nil {
 		defer file.Close()
-
-		// Create avatar directory if not exists
-		avaDir := "./ava"
-		if err := os.MkdirAll(avaDir, 0755); err != nil {
-			h.logger.Error("Failed to create avatar directory", zap.Error(err))
-			http.Error(w, "Failed to save avatar", http.StatusInternalServerError)
-			return
-		}
 
 		// Generate unique filename
 		filename := fmt.Sprintf("%d_%s", time.Now().UnixNano(), header.Filename)
@@ -667,6 +695,58 @@ func (h *Handler) UpdateDoctorHandler(w http.ResponseWriter, r *http.Request, ct
 		avatarPath = &fullPath
 	}
 
+	// Handle diploma upload
+	if file, header, err := r.FormFile("diploma"); err == nil {
+		defer file.Close()
+
+		// Generate unique filename
+		filename := fmt.Sprintf("%d_%s", time.Now().UnixNano(), header.Filename)
+		fullPath := filepath.Join(docsDir, filename)
+
+		// Save file
+		out, err := os.Create(fullPath)
+		if err != nil {
+			h.logger.Error("Failed to create diploma file", zap.Error(err))
+			http.Error(w, "Failed to save diploma", http.StatusInternalServerError)
+			return
+		}
+		defer out.Close()
+
+		if _, err := io.Copy(out, file); err != nil {
+			h.logger.Error("Failed to copy diploma data", zap.Error(err))
+			http.Error(w, "Failed to save diploma", http.StatusInternalServerError)
+			return
+		}
+
+		diplomaPath = &fullPath
+	}
+
+	// Handle certificate upload
+	if file, header, err := r.FormFile("certificate"); err == nil {
+		defer file.Close()
+
+		// Generate unique filename
+		filename := fmt.Sprintf("%d_%s", time.Now().UnixNano(), header.Filename)
+		fullPath := filepath.Join(docsDir, filename)
+
+		// Save file
+		out, err := os.Create(fullPath)
+		if err != nil {
+			h.logger.Error("Failed to create certificate file", zap.Error(err))
+			http.Error(w, "Failed to save certificate", http.StatusInternalServerError)
+			return
+		}
+		defer out.Close()
+
+		if _, err := io.Copy(out, file); err != nil {
+			h.logger.Error("Failed to copy certificate data", zap.Error(err))
+			http.Error(w, "Failed to save certificate", http.StatusInternalServerError)
+			return
+		}
+
+		certPath = &fullPath
+	}
+
 	// Prepare update
 	now := time.Now()
 	updateDoc := &repository.DoctorRegistration{
@@ -677,9 +757,15 @@ func (h *Handler) UpdateDoctorHandler(w http.ResponseWriter, r *http.Request, ct
 		Time:             &now,
 	}
 
-	// Only update avatar if new one was uploaded
+	// Only update files if new ones were uploaded
 	if avatarPath != nil {
 		updateDoc.AvatarPath = avatarPath
+	}
+	if diplomaPath != nil {
+		updateDoc.DiplomaPath = diplomaPath
+	}
+	if certPath != nil {
+		updateDoc.CertPath = certPath
 	}
 
 	// Update in DB
@@ -714,6 +800,12 @@ func (h *Handler) UpdateDoctorHandler(w http.ResponseWriter, r *http.Request, ct
 	}
 	if updatedDoctor.AvatarPath != nil && *updatedDoctor.AvatarPath != "" {
 		response["avatar_url"] = fmt.Sprintf("/files/ava/%s", filepath.Base(*updatedDoctor.AvatarPath))
+	}
+	if updatedDoctor.DiplomaPath != nil && *updatedDoctor.DiplomaPath != "" {
+		response["diploma_url"] = fmt.Sprintf("/files/documents/%s", filepath.Base(*updatedDoctor.DiplomaPath))
+	}
+	if updatedDoctor.CertPath != nil && *updatedDoctor.CertPath != "" {
+		response["certificate_url"] = fmt.Sprintf("/files/documents/%s", filepath.Base(*updatedDoctor.CertPath))
 	}
 
 	// Send success notification to doctor
@@ -769,18 +861,41 @@ func (h *Handler) StartWebServer(botToken string, ctx context.Context, b *bot.Bo
 
 	// Serve the update mini app
 	http.HandleFunc("/update-doctor", func(w http.ResponseWriter, r *http.Request) {
-		http.ServeFile(w, r, "./server/templates/update-doctor.html")
+		// Check if the file exists in server/templates
+		templatePath := "./server/templates/update-doctor.html"
+		if _, err := os.Stat(templatePath); os.IsNotExist(err) {
+			h.logger.Error("Template file not found", zap.String("path", templatePath))
+			http.Error(w, "Template not found", http.StatusNotFound)
+			return
+		}
+		http.ServeFile(w, r, templatePath)
 	})
 
 	http.HandleFunc("/client", func(w http.ResponseWriter, r *http.Request) {
-		http.ServeFile(w, r, "./server/templates/client.html")
+		templatePath := "./server/templates/client.html"
+		if _, err := os.Stat(templatePath); os.IsNotExist(err) {
+			h.logger.Error("Template file not found", zap.String("path", templatePath))
+			http.Error(w, "Template not found", http.StatusNotFound)
+			return
+		}
+		http.ServeFile(w, r, templatePath)
 	})
 
 	http.HandleFunc("/doctors", func(w http.ResponseWriter, r *http.Request) {
-		http.ServeFile(w, r, "./server/templates/doctor.html")
+		templatePath := "./server/templates/doctor.html"
+		if _, err := os.Stat(templatePath); os.IsNotExist(err) {
+			h.logger.Error("Template file not found", zap.String("path", templatePath))
+			http.Error(w, "Template not found", http.StatusNotFound)
+			return
+		}
+		http.ServeFile(w, r, templatePath)
 	})
 
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/" {
+			http.NotFound(w, r)
+			return
+		}
 		http.ServeFile(w, r, "index.html")
 	})
 
