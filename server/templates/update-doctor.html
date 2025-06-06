@@ -1048,19 +1048,6 @@
       setTimeout(() => hideElement('success'), 3000);
     }
 
-    // Get base URL based on current location
-    function getBaseUrl() {
-      const currentHost = window.location.hostname;
-      const currentPort = window.location.port;
-      
-      let baseUrl = window.location.protocol + '//' + currentHost;
-      if (currentPort) {
-        baseUrl += ':' + currentPort;
-      }
-      
-      return baseUrl;
-    }
-
     // Update document statuses
     function updateDocumentStatuses() {
       const t = translations[currentLang];
@@ -1101,8 +1088,7 @@
       }
 
       try {
-        const baseUrl = getBaseUrl();
-        const response = await fetch(`${baseUrl}/doctor/${doctorId}`, {
+        const response = await fetch(`/doctor/${doctorId}`, {
           method: 'GET',
           headers: {
             'Accept': 'application/json'
@@ -1127,12 +1113,10 @@
     function displayDoctorData() {
       if (!doctorData) return;
 
-      const baseUrl = getBaseUrl();
-
       // Update avatar
       if (doctorData.avatar_url) {
-        document.getElementById('avatarDisplay').src = baseUrl + doctorData.avatar_url;
-        document.getElementById('avatarPreview').src = baseUrl + doctorData.avatar_url;
+        document.getElementById('avatarDisplay').src = doctorData.avatar_url;
+        document.getElementById('avatarPreview').src = doctorData.avatar_url;
       } else {
         const defaultAvatar = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100"%3E%3Ccircle cx="50" cy="50" r="50" fill="%23667eea"/%3E%3Ctext x="50" y="50" text-anchor="middle" dy=".3em" fill="white" font-size="40" font-family="Arial"%3E👨‍⚕️%3C/text%3E%3C/svg%3E';
         document.getElementById('avatarDisplay').src = defaultAvatar;
@@ -1236,8 +1220,7 @@
       saveBtn.disabled = true;
 
       try {
-        const baseUrl = getBaseUrl();
-        const response = await fetch(`${baseUrl}/doctor`, {
+        const response = await fetch("/doctor", {
           method: 'PUT',
           body: formData
         });

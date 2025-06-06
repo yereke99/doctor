@@ -928,7 +928,7 @@
     }
 
     // Main button handler
-    Telegram.WebApp.onEvent('mainButtonClicked', () => {
+    Telegram.WebApp.onEvent('mainButtonClicked', async () => {
       if (currentStep === 2) {
         if (buildPreview()) {
           show(3);
@@ -938,19 +938,17 @@
         document.getElementById('step3').classList.add('loading');
         Telegram.WebApp.MainButton.showProgress();
         
-        const fd = new FormData(document.getElementById('doctorForm'));
-        fetch("https://ef7737ba86474923176837b49be266ec.serveo.net/doctor", {
-          method: "POST",
-          mode: "cors",
-          body: fd
-        })
-        .then(async res => {
-          const text = await res.text();
-          if (!res.ok) {
-            Telegram.WebApp.MainButton.hideProgress();
-            document.getElementById('step3').classList.remove('loading');
-            Telegram.WebApp.showAlert(`Ошибка ${res.status}: ${text}`);
-            throw new Error(text);
+        try {
+          const fd = new FormData(document.getElementById('doctorForm'));
+          const response = await fetch("/doctor", {
+            method: "POST",
+            mode: "cors",
+            body: fd
+          });
+          
+          if (!response.ok) {
+            const text = await response.text();
+            throw new Error(`HTTP error! status: ${response.status}, message: ${text}`);
           }
           
           // Success animation
@@ -962,12 +960,12 @@
           }, () => {
             Telegram.WebApp.close();
           });
-        })
-        .catch(err => {
-          console.error(err);
+        } catch (error) {
+          console.error('Error:', error);
           Telegram.WebApp.MainButton.hideProgress();
           document.getElementById('step3').classList.remove('loading');
-        });
+          Telegram.WebApp.showAlert(`Ошибка: ${error.message}`);
+        }
       }
     });
 
