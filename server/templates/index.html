@@ -1,0 +1,1088 @@
+<!DOCTYPE html>
+<html lang="kz">
+<head>
+  <meta charset="UTF-8">
+  <title>MedHub - Медициналық қызметтер</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <style>
+    :root {
+      /* Light theme */
+      --bg-primary: #f0f8ff;
+      --bg-secondary: #ffffff;
+      --bg-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      --card-bg: rgba(255, 255, 255, 0.98);
+      --card-border: rgba(0, 0, 0, 0.06);
+      --text-primary: #1a202c;
+      --text-secondary: #4a5568;
+      --text-muted: #718096;
+      --accent-primary: #667eea;
+      --accent-secondary: #48bb78;
+      --accent-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      --success-gradient: linear-gradient(135deg, #48bb78 0%, #38a169 100%);
+      --doctor-gradient: linear-gradient(135deg, #3b82f6 0%, #1e40af 100%);
+      --patient-gradient: linear-gradient(135deg, #10b981 0%, #059669 100%);
+      --input-bg: #f7fafc;
+      --input-border: #e2e8f0;
+      --input-focus: #667eea;
+      --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.1);
+      --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.15);
+      --shadow-lg: 0 10px 25px rgba(0, 0, 0, 0.2);
+      --shadow-xl: 0 20px 40px rgba(0, 0, 0, 0.25);
+      --glow: rgba(102, 126, 234, 0.5);
+      --modal-bg: rgba(0, 0, 0, 0.5);
+    }
+
+    [data-theme="dark"] {
+      /* Dark theme */
+      --bg-primary: #0f172a;
+      --bg-secondary: #1e293b;
+      --bg-gradient: linear-gradient(135deg, #1e3a8a 0%, #581c87 100%);
+      --card-bg: rgba(30, 41, 59, 0.98);
+      --card-border: rgba(255, 255, 255, 0.06);
+      --text-primary: #f1f5f9;
+      --text-secondary: #cbd5e1;
+      --text-muted: #94a3b8;
+      --accent-primary: #818cf8;
+      --accent-secondary: #34d399;
+      --accent-gradient: linear-gradient(135deg, #818cf8 0%, #6366f1 100%);
+      --success-gradient: linear-gradient(135deg, #34d399 0%, #10b981 100%);
+      --doctor-gradient: linear-gradient(135deg, #60a5fa 0%, #3b82f6 100%);
+      --patient-gradient: linear-gradient(135deg, #34d399 0%, #10b981 100%);
+      --input-bg: #1e293b;
+      --input-border: #334155;
+      --input-focus: #818cf8;
+      --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.3);
+      --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
+      --shadow-lg: 0 10px 25px rgba(0, 0, 0, 0.5);
+      --shadow-xl: 0 20px 40px rgba(0, 0, 0, 0.6);
+      --glow: rgba(129, 140, 248, 0.5);
+      --modal-bg: rgba(0, 0, 0, 0.7);
+    }
+
+    * { 
+      box-sizing: border-box; 
+      margin: 0; 
+      padding: 0; 
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Inter', sans-serif;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      position: relative;
+      transition: all 0.3s ease;
+      overflow-x: hidden;
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    body::before {
+      content: '';
+      position: fixed;
+      top: -50%;
+      left: -50%;
+      width: 200%;
+      height: 200%;
+      background: var(--bg-gradient);
+      opacity: 0.03;
+      z-index: -2;
+      animation: gradientAnimation 25s ease-in-out infinite;
+    }
+
+    body::after {
+      content: '';
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: 
+        radial-gradient(circle at 20% 80%, var(--accent-primary) 0%, transparent 50%),
+        radial-gradient(circle at 80% 20%, var(--accent-secondary) 0%, transparent 50%);
+      opacity: 0.05;
+      z-index: -1;
+      pointer-events: none;
+    }
+
+    @keyframes gradientAnimation {
+      0%, 100% { transform: rotate(0deg); }
+      33% { transform: rotate(120deg); }
+      66% { transform: rotate(240deg); }
+    }
+
+    .lang-switch {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      display: flex;
+      gap: 8px;
+      z-index: 1000;
+    }
+
+    .lang-switch button {
+      background: var(--card-bg);
+      color: var(--text-primary);
+      border: 1px solid var(--card-border);
+      border-radius: 50px;
+      padding: 8px 16px;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 0.85rem;
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      transition: all 0.3s ease;
+      box-shadow: var(--shadow-sm);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .lang-switch button::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: -100%;
+      width: 100%;
+      height: 100%;
+      background: var(--accent-gradient);
+      transition: left 0.3s ease;
+      z-index: -1;
+    }
+
+    .lang-switch button:hover {
+      transform: translateY(-2px);
+      box-shadow: var(--shadow-md);
+      color: white;
+      border-color: transparent;
+    }
+
+    .lang-switch button:hover::before {
+      left: 0;
+    }
+
+    .lang-switch button.active {
+      background: var(--accent-gradient);
+      color: white;
+      border-color: transparent;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 480px;
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 24px;
+      box-shadow: var(--shadow-xl);
+      padding: 32px;
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      position: relative;
+      overflow: hidden;
+      transition: all 0.4s ease;
+      animation: fadeIn 0.6s ease-out;
+      text-align: center;
+    }
+
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+        transform: translateY(30px) scale(0.95);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+      }
+    }
+
+    .container::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 4px;
+      background: var(--accent-gradient);
+      animation: shimmer 2s ease-in-out infinite;
+    }
+
+    @keyframes shimmer {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.7; }
+    }
+
+    .page {
+      display: none;
+      animation: pageSlide 0.5s ease-out;
+    }
+
+    .page.active {
+      display: block;
+    }
+
+    @keyframes pageSlide {
+      from {
+        opacity: 0;
+        transform: translateX(20px);
+      }
+      to {
+        opacity: 1;
+        transform: translateX(0);
+      }
+    }
+
+    .logo {
+      width: 120px;
+      height: 120px;
+      margin: 0 auto 24px;
+      background: var(--accent-gradient);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 4rem;
+      box-shadow: var(--shadow-lg);
+      animation: logoFloat 3s ease-in-out infinite;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .logo::before {
+      content: '';
+      position: absolute;
+      top: -50%;
+      left: -50%;
+      width: 200%;
+      height: 200%;
+      background: linear-gradient(45deg, transparent, rgba(255,255,255,0.1), transparent);
+      animation: logoShine 3s linear infinite;
+    }
+
+    @keyframes logoFloat {
+      0%, 100% { transform: translateY(0) scale(1); }
+      50% { transform: translateY(-10px) scale(1.05); }
+    }
+
+    @keyframes logoShine {
+      0% { transform: translateX(-100%) translateY(-100%) rotate(45deg); }
+      100% { transform: translateX(100%) translateY(100%) rotate(45deg); }
+    }
+
+    h1 {
+      margin-bottom: 16px;
+      font-size: 2rem;
+      font-weight: 800;
+      background: var(--accent-gradient);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      line-height: 1.3;
+      letter-spacing: -0.02em;
+    }
+
+    .subtitle {
+      color: var(--text-secondary);
+      margin-bottom: 32px;
+      font-size: 1.1rem;
+      line-height: 1.6;
+      font-weight: 400;
+    }
+
+    .buttons-container {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      margin-top: 32px;
+    }
+
+    .main-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      border: none;
+      border-radius: 16px;
+      padding: 20px 24px;
+      font-size: 1.1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      position: relative;
+      overflow: hidden;
+      text-decoration: none;
+      color: white;
+      box-shadow: var(--shadow-md);
+      width: 100%;
+      letter-spacing: 0.02em;
+      min-height: 64px;
+    }
+
+    .main-btn::before {
+      content: '';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 0;
+      height: 0;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.2);
+      transform: translate(-50%, -50%);
+      transition: width 0.6s, height 0.6s;
+    }
+
+    .main-btn:hover {
+      transform: translateY(-3px);
+      box-shadow: var(--shadow-lg);
+    }
+
+    .main-btn:hover::before {
+      width: 300px;
+      height: 300px;
+    }
+
+    .main-btn:active {
+      transform: translateY(-1px);
+    }
+
+    .doctor-btn {
+      background: var(--doctor-gradient);
+      box-shadow: 0 6px 20px rgba(59, 130, 246, 0.3);
+    }
+
+    .doctor-btn:hover {
+      box-shadow: 0 8px 25px rgba(59, 130, 246, 0.4);
+    }
+
+    .patient-btn {
+      background: var(--patient-gradient);
+      box-shadow: 0 6px 20px rgba(16, 185, 129, 0.3);
+    }
+
+    .patient-btn:hover {
+      box-shadow: 0 8px 25px rgba(16, 185, 129, 0.4);
+    }
+
+    .btn-icon {
+      font-size: 1.5rem;
+      filter: drop-shadow(0 2px 4px rgba(0,0,0,0.2));
+    }
+
+    .loading {
+      text-align: center;
+      padding: 40px;
+      color: var(--text-muted);
+    }
+
+    .loading::after {
+      content: '';
+      display: inline-block;
+      width: 40px;
+      height: 40px;
+      margin: 20px auto;
+      border: 3px solid var(--input-border);
+      border-top-color: var(--accent-primary);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    /* Modal styles */
+    .modal {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: var(--modal-bg);
+      z-index: 2000;
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+    }
+
+    .modal.active {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      animation: modalFadeIn 0.3s ease-out;
+    }
+
+    @keyframes modalFadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+
+    .modal-content {
+      background: var(--card-bg);
+      border-radius: 20px;
+      padding: 32px;
+      max-width: 90vw;
+      max-height: 90vh;
+      overflow-y: auto;
+      box-shadow: var(--shadow-xl);
+      position: relative;
+      animation: modalSlideIn 0.3s ease-out;
+    }
+
+    @keyframes modalSlideIn {
+      from {
+        opacity: 0;
+        transform: translateY(20px) scale(0.95);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+      }
+    }
+
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 24px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid var(--input-border);
+    }
+
+    .modal-title {
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: var(--accent-primary);
+    }
+
+    .close-btn {
+      background: none;
+      border: none;
+      font-size: 1.5rem;
+      cursor: pointer;
+      color: var(--text-muted);
+      padding: 8px;
+      border-radius: 50%;
+      transition: all 0.3s ease;
+    }
+
+    .close-btn:hover {
+      background: var(--input-bg);
+      color: var(--text-primary);
+    }
+
+    .modal-buttons {
+      display: flex;
+      gap: 12px;
+      margin-top: 24px;
+      flex-wrap: wrap;
+    }
+
+    .modal-btn {
+      flex: 1;
+      min-width: 120px;
+      padding: 12px 24px;
+      border: none;
+      border-radius: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+
+    .modal-btn.primary {
+      background: var(--success-gradient);
+      color: white;
+      box-shadow: 0 4px 12px rgba(72, 187, 120, 0.3);
+    }
+
+    .modal-btn.primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 16px rgba(72, 187, 120, 0.4);
+    }
+
+    .modal-btn.secondary {
+      background: var(--input-bg);
+      color: var(--text-primary);
+      border: 1px solid var(--input-border);
+    }
+
+    .modal-btn.secondary:hover {
+      background: var(--card-bg);
+      transform: translateY(-2px);
+    }
+
+    .pdf-viewer {
+      width: 100%;
+      height: 400px;
+      border: 1px solid var(--input-border);
+      border-radius: 12px;
+      margin: 16px 0;
+    }
+
+    .error {
+      background: rgba(239, 68, 68, 0.1);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+      color: #dc2626;
+      padding: 16px;
+      border-radius: 12px;
+      margin: 16px 0;
+      text-align: center;
+    }
+
+    /* Floating decorative elements */
+    .decoration {
+      position: fixed;
+      pointer-events: none;
+      z-index: -1;
+    }
+
+    .decoration-1 {
+      top: 15%;
+      right: 10%;
+      width: 150px;
+      height: 150px;
+      background: var(--doctor-gradient);
+      opacity: 0.08;
+      border-radius: 50%;
+      filter: blur(40px);
+      animation: float-decoration 20s ease-in-out infinite;
+    }
+
+    .decoration-2 {
+      bottom: 20%;
+      left: 15%;
+      width: 200px;
+      height: 200px;
+      background: var(--patient-gradient);
+      opacity: 0.08;
+      border-radius: 50%;
+      filter: blur(60px);
+      animation: float-decoration 25s ease-in-out infinite reverse;
+    }
+
+    .decoration-3 {
+      top: 50%;
+      left: 5%;
+      width: 100px;
+      height: 100px;
+      background: var(--accent-gradient);
+      opacity: 0.06;
+      border-radius: 50%;
+      filter: blur(30px);
+      animation: float-decoration 18s ease-in-out infinite;
+    }
+
+    @keyframes float-decoration {
+      0%, 100% { transform: translate(0, 0) scale(1); }
+      25% { transform: translate(30px, -30px) scale(1.1); }
+      50% { transform: translate(-20px, 40px) scale(0.9); }
+      75% { transform: translate(40px, 20px) scale(1.05); }
+    }
+
+    /* Mobile optimizations */
+    @media (max-width: 480px) {
+      body {
+        padding: 12px;
+      }
+
+      .lang-switch {
+        top: 12px;
+        right: 12px;
+      }
+
+      .lang-switch button {
+        padding: 6px 14px;
+        font-size: 0.8rem;
+      }
+
+      .container {
+        padding: 24px 20px;
+        border-radius: 20px;
+        max-width: 100%;
+      }
+
+      .logo {
+        width: 100px;
+        height: 100px;
+        font-size: 3rem;
+      }
+
+      h1 {
+        font-size: 1.5rem;
+        margin-bottom: 12px;
+      }
+
+      .subtitle {
+        font-size: 1rem;
+        margin-bottom: 24px;
+      }
+
+      .main-btn {
+        padding: 18px 20px;
+        font-size: 1rem;
+        min-height: 60px;
+      }
+
+      .modal-content {
+        padding: 24px 20px;
+        margin: 20px;
+      }
+
+      .modal-buttons {
+        flex-direction: column;
+      }
+
+      .modal-btn {
+        min-width: auto;
+      }
+
+      .pdf-viewer {
+        height: 300px;
+      }
+
+      .decoration-1, .decoration-2, .decoration-3 {
+        display: none;
+      }
+    }
+
+    /* Reduced motion */
+    @media (prefers-reduced-motion: reduce) {
+      * {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+      }
+    }
+
+    /* Dark mode adjustments */
+    @media (prefers-color-scheme: dark) {
+      :root {
+        color-scheme: dark;
+      }
+    }
+  </style>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+</head>
+<body>
+  <div class="decoration decoration-1"></div>
+  <div class="decoration decoration-2"></div>
+  <div class="decoration decoration-3"></div>
+
+  <div class="lang-switch">
+    <button onclick="setLang('kz')" id="lang-kz" class="active">ҚАЗ</button>
+    <button onclick="setLang('ru')" id="lang-ru">РУС</button>
+  </div>
+
+  <div class="container">
+    <!-- Loading Page -->
+    <div id="loading-page" class="page active">
+      <div class="loading">
+        <div id="loading-text">Жүктелуде...</div>
+      </div>
+    </div>
+
+    <!-- Welcome Page -->
+    <div id="welcome-page" class="page">
+      <div class="logo">🏥</div>
+      <h1 id="welcome-title">MedHub-қа қош келдіңіз!</h1>
+      <p class="subtitle" id="welcome-subtitle">
+        Сапалы медициналық қызметтерге жылдам қол жеткізу
+      </p>
+      
+      <div class="buttons-container">
+        <button class="main-btn doctor-btn" onclick="chooseDoctor()">
+          <span class="btn-icon">👩‍⚕️</span>
+          <span id="btn-doctor">Дәрігер болу</span>
+        </button>
+        
+        <button class="main-btn patient-btn" onclick="choosePatient()">
+          <span class="btn-icon">🏥</span>
+          <span id="btn-patient">Дәрігер керек</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Agreement Modal -->
+  <div id="agreement-modal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 class="modal-title" id="modal-title">Келісім шарттары</h3>
+        <button class="close-btn" onclick="closeModal()">&times;</button>
+      </div>
+      
+      <div id="modal-body">
+        <iframe id="pdf-viewer" class="pdf-viewer" src="" frameborder="0"></iframe>
+        <div id="error-message" class="error" style="display: none;">
+          PDF файлын жүктеу мүмкін болмады. Қайталап көріңіз.
+        </div>
+      </div>
+      
+      <div class="modal-buttons">
+        <button class="modal-btn secondary" onclick="closeModal()" id="btn-decline">
+          Келіспеймін
+        </button>
+        <button class="modal-btn primary" onclick="acceptAgreement()" id="btn-accept">
+          Келісемін
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Translations
+    const translations = {
+      kz: {
+        loading: 'Жүктелуде...',
+        'welcome-title': 'MedHub-қа қош келдіңіз!',
+        'welcome-subtitle': 'Сапалы медициналық қызметтерге жылдам қол жеткізу',
+        'btn-doctor': 'Дәрігер болу',
+        'btn-patient': 'Дәрігер керек',
+        'modal-title-doctor': 'Дәрігер келісім шарттары',
+        'modal-title-patient': 'Пайдаланушы келісім шарттары',
+        'btn-decline': 'Келіспеймін',
+        'btn-accept': 'Келісемін',
+        'error-user-check': 'Пайдаланушыны тексеру кезінде қате орын алды',
+        'error-agreement': 'Келісім шарттарын жүктеу кезінде қате орын алды'
+      },
+      ru: {
+        loading: 'Загрузка...',
+        'welcome-title': 'Добро пожаловать в MedHub!',
+        'welcome-subtitle': 'Быстрый доступ к качественным медицинским услугам',
+        'btn-doctor': 'Стать врачом',
+        'btn-patient': 'Нужен врач',
+        'modal-title-doctor': 'Соглашение для врача',
+        'modal-title-patient': 'Пользовательское соглашение',
+        'btn-decline': 'Не согласен',
+        'btn-accept': 'Согласен',
+        'error-user-check': 'Ошибка при проверке пользователя',
+        'error-agreement': 'Ошибка загрузки соглашения'
+      }
+    };
+
+    // Global variables
+    let currentLang = 'kz'; // Always start with Kazakh
+    let userTelegramID = null;
+    let userType = null; // 'doctor' or 'patient'
+    let userStatus = null;
+
+    // Automatic theme management based on time
+    function detectSystemTheme() {
+      const hour = new Date().getHours();
+      const isDark = hour >= 20 || hour < 6; // Dark theme from 8 PM to 6 AM
+      return isDark ? 'dark' : 'light';
+    }
+
+    function applyTheme(theme) {
+      document.documentElement.setAttribute('data-theme', theme);
+    }
+
+    // Initialize theme
+    let currentTheme = detectSystemTheme();
+    applyTheme(currentTheme);
+
+    // Update theme based on time every minute
+    setInterval(() => {
+      const newTheme = detectSystemTheme();
+      if (newTheme !== currentTheme) {
+        currentTheme = newTheme;
+        applyTheme(currentTheme);
+      }
+    }, 60000);
+
+    // Telegram WebApp initialization
+    Telegram.WebApp.ready();
+    Telegram.WebApp.expand();
+
+    // Get user data
+    const user = Telegram.WebApp.initDataUnsafe?.user;
+    if (user) {
+      userTelegramID = user.id;
+    }
+
+    // Adapt to Telegram theme if available
+    if (Telegram.WebApp.colorScheme) {
+      currentTheme = Telegram.WebApp.colorScheme;
+      applyTheme(currentTheme);
+    }
+
+    // Listen for theme changes from Telegram
+    Telegram.WebApp.onEvent('themeChanged', function() {
+      if (Telegram.WebApp.colorScheme) {
+        currentTheme = Telegram.WebApp.colorScheme;
+        applyTheme(currentTheme);
+      }
+    });
+
+    // Language switching
+    function setLang(lang) {
+      currentLang = lang;
+      document.querySelectorAll('.lang-switch button').forEach(btn => {
+        btn.classList.remove('active');
+      });
+      document.getElementById('lang-' + lang).classList.add('active');
+      
+      updateTexts();
+    }
+
+    function updateTexts() {
+      const t = translations[currentLang];
+      
+      // Update all translatable elements
+      Object.keys(t).forEach(key => {
+        const element = document.getElementById(key);
+        if (element) {
+          element.textContent = t[key];
+        }
+      });
+    }
+
+    // Show/hide pages
+    function showPage(pageId) {
+      document.querySelectorAll('.page').forEach(page => {
+        page.classList.remove('active');
+      });
+      document.getElementById(pageId).classList.add('active');
+    }
+
+    // Modal functions
+    function showModal() {
+      document.getElementById('agreement-modal').classList.add('active');
+    }
+
+    function closeModal() {
+      document.getElementById('agreement-modal').classList.remove('active');
+      document.getElementById('pdf-viewer').src = '';
+      document.getElementById('error-message').style.display = 'none';
+    }
+
+    // Check user status
+    async function checkUserStatus() {
+      if (!userTelegramID) {
+        console.log('No Telegram ID found');
+        showPage('welcome-page');
+        return;
+      }
+
+      console.log('Checking user status for ID:', userTelegramID);
+
+      try {
+        const response = await fetch(`/api/user/${userTelegramID}`, {
+          method: 'GET',
+          headers: {
+            'Accept': 'application/json'
+          }
+        });
+
+        console.log('Response status:', response.status);
+
+        if (response.ok) {
+          const userData = await response.json();
+          console.log('User data received:', userData);
+          userStatus = userData;
+          
+          // Check if user is a registered doctor
+          if (userData.is_doctor === true || userData.isDoctor === true) {
+            console.log('User is a doctor, redirecting to update page');
+            window.location.href = '/update-doctor';
+            return;
+          }
+          
+          console.log('User is not a doctor, showing welcome page');
+        } else {
+          console.log('API response not OK:', response.status);
+        }
+        
+        // Show welcome page for new users or patients
+        showPage('welcome-page');
+        
+      } catch (error) {
+        console.error('Error checking user status:', error);
+        // Show welcome page anyway
+        showPage('welcome-page');
+      }
+    }
+
+    // Show error message
+    function showError(message) {
+      const errorEl = document.getElementById('error-message');
+      errorEl.textContent = message;
+      errorEl.style.display = 'block';
+      console.error('Error:', message);
+    }
+
+    // Choose doctor path
+    async function chooseDoctor() {
+      userType = 'doctor';
+      
+      // Check if user already agreed to doctor terms
+      if (userStatus && (userStatus.doctor_agreement_accepted || userStatus.doctorAgreementAccepted)) {
+        console.log('User already agreed to doctor terms, redirecting');
+        window.location.href = '/doctors';
+        return;
+      }
+      
+      // Show doctor agreement
+      const t = translations[currentLang];
+      document.getElementById('modal-title').textContent = t['modal-title-doctor'];
+      
+      // Load doctor agreement PDF
+      const pdfViewer = document.getElementById('pdf-viewer');
+      pdfViewer.src = '/offerta/doctor-offerta.pdf';
+      
+      pdfViewer.onload = () => {
+        document.getElementById('error-message').style.display = 'none';
+        console.log('Doctor PDF loaded successfully');
+      };
+      
+      pdfViewer.onerror = () => {
+        console.error('Failed to load doctor PDF');
+        showError(translations[currentLang]['error-agreement']);
+      };
+      
+      showModal();
+    }
+
+    // Choose patient path
+    async function choosePatient() {
+      userType = 'patient';
+      
+      // Check if user already agreed to patient terms
+      if (userStatus && (userStatus.patient_agreement_accepted || userStatus.patientAgreementAccepted)) {
+        console.log('User already agreed to patient terms, redirecting');
+        window.location.href = '/client';
+        return;
+      }
+      
+      // Show patient agreement
+      const t = translations[currentLang];
+      document.getElementById('modal-title').textContent = t['modal-title-patient'];
+      
+      // Load patient agreement PDF
+      const pdfViewer = document.getElementById('pdf-viewer');
+      pdfViewer.src = '/offerta/user-offerta.pdf';
+      
+      pdfViewer.onload = () => {
+        document.getElementById('error-message').style.display = 'none';
+        console.log('Patient PDF loaded successfully');
+      };
+      
+      pdfViewer.onerror = () => {
+        console.error('Failed to load patient PDF');
+        showError(translations[currentLang]['error-agreement']);
+      };
+      
+      showModal();
+    }
+
+    // Accept agreement
+    async function acceptAgreement() {
+      if (!userTelegramID) {
+        showError(translations[currentLang]['error-user-check']);
+        return;
+      }
+
+      console.log('Accepting agreement for user type:', userType);
+
+      try {
+        // Save agreement acceptance
+        const agreementData = {
+          telegram_id: userTelegramID,
+          user_type: userType,
+          agreement_accepted: true,
+          timestamp: new Date().toISOString()
+        };
+
+        console.log('Sending agreement data:', agreementData);
+
+        const response = await fetch('/api/user/agreement', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(agreementData)
+        });
+
+        console.log('Agreement response status:', response.status);
+
+        if (response.ok) {
+          const responseData = await response.json();
+          console.log('Agreement saved successfully:', responseData);
+          closeModal();
+          
+          // Redirect based on user type
+          if (userType === 'doctor') {
+            console.log('Redirecting to doctor registration');
+            window.location.href = '/doctors';
+          } else if (userType === 'patient') {
+            console.log('Redirecting to patient booking');
+            window.location.href = '/client';
+          }
+        } else {
+          const errorText = await response.text();
+          console.error('Failed to save agreement:', errorText);
+          throw new Error('Failed to save agreement: ' + errorText);
+        }
+        
+      } catch (error) {
+        console.error('Error saving agreement:', error);
+        showError(translations[currentLang]['error-agreement']);
+      }
+    }
+
+    // Initialize app
+    function initApp() {
+      updateTexts();
+      checkUserStatus();
+    }
+
+    // Smooth container animations
+    function animateContainer() {
+      const container = document.querySelector('.container');
+      container.style.transform = 'scale(0.98)';
+      setTimeout(() => {
+        container.style.transform = 'scale(1)';
+      }, 200);
+    }
+
+    // Add click effects to buttons
+    document.addEventListener('click', (e) => {
+      if (e.target.classList.contains('main-btn')) {
+        animateContainer();
+      }
+    });
+
+    // Close modal on outside click
+    document.getElementById('agreement-modal').addEventListener('click', (e) => {
+      if (e.target.id === 'agreement-modal') {
+        closeModal();
+      }
+    });
+
+    // Handle escape key
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        closeModal();
+      }
+    });
+
+    // Adapt to viewport changes
+    Telegram.WebApp.onEvent('viewportChanged', function() {
+      const viewportHeight = Telegram.WebApp.viewportHeight;
+      document.body.style.minHeight = viewportHeight + 'px';
+    });
+
+    // Initialize when DOM is loaded
+    document.addEventListener('DOMContentLoaded', initApp);
+
+    // Initialize immediately if DOM is already loaded
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', initApp);
+    } else {
+      initApp();
+    }
+  </script>
+</body>
+</html>

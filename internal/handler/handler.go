@@ -1,4 +1,5 @@
-// handler/handler.go
+// Updated handler.go to work with your existing repository structure
+
 package handler
 
 import (
@@ -6,6 +7,7 @@ import (
 	"doctor/config"
 	"doctor/internal/repository"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -15,16 +17,20 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/go-telegram/bot"
 	"github.com/go-telegram/bot/models"
 	"github.com/go-telegram/ui/slider"
 	"go.uber.org/zap"
+	"golang.org/x/sync/errgroup"
+	"golang.org/x/time/rate"
 )
 
 type Handler struct {
 	repo                    *repository.DoctorRepository
+	userRepo                *repository.UserRepository
 	redisRepo               *repository.RedisRepository
 	specialtyMapping        map[string]string
 	reverseSpecialtyMapping map[string]string
@@ -32,10 +38,17 @@ type Handler struct {
 	cfg                     *config.Config
 }
 
-// NewHandler инициализирует Handler с репозиторием и картами специальностей.
-func NewHandler(repo *repository.DoctorRepository, redisRepo *repository.RedisRepository, logger *zap.Logger, cfg *config.Config) *Handler {
+// NewHandler инициализирует Handler с репозиториями
+func NewHandler(
+	repo *repository.DoctorRepository,
+	userRepo *repository.UserRepository,
+	redisRepo *repository.RedisRepository,
+	logger *zap.Logger,
+	cfg *config.Config,
+) *Handler {
 	return &Handler{
 		repo:      repo,
+		userRepo:  userRepo,
 		redisRepo: redisRepo,
 		specialtyMapping: map[string]string{
 			"Терапевт":          "THERAPIST",
@@ -66,17 +79,130 @@ func NewHandler(repo *repository.DoctorRepository, redisRepo *repository.RedisRe
 	}
 }
 
+func (h *Handler) SendHandler(ctx context.Context, b *bot.Bot, update *models.Update) {
+	msg := update.Message
+	if msg == nil || msg.From.ID != h.cfg.AdminID {
+		return
+	}
+
+	// Определяем тип сообщения и получаем fileID/caption
+	msgType, fileID, caption := h.parseMessage(msg)
+
+	// Загружаем всех пользователей
+	userIDs, err := []int64{}, errors.New("new error test")
+	if err != nil {
+		h.logger.Error("failed to load user IDs", zap.Error(err))
+		return
+	}
+
+	rateLimiter := rate.NewLimiter(rate.Every(time.Second/30), 1)
+	var successCount, failCount int64
+	errGroup, ctx := errgroup.WithContext(ctx)
+
+	for _, userID := range userIDs {
+		errGroup.Go(func() error {
+			if err := rateLimiter.Wait(ctx); err != nil {
+				return err
+			}
+			if err := h.sendToUser(ctx, b, userID, msgType, fileID, caption); err != nil {
+				atomic.AddInt64(&failCount, 1)
+				h.logger.Error("send failed", zap.Error(err), zap.Int64("chatID", userID))
+			} else {
+				atomic.AddInt64(&successCount, 1)
+			}
+			return nil
+		})
+	}
+	// Итоговый отчёт для админа
+	summary := fmt.Sprintf(
+		"📣 Рассылка завершена:\n✅ Успешно: %d\n❌ Ошибок: %d",
+		atomic.LoadInt64(&successCount),
+		atomic.LoadInt64(&failCount),
+	)
+	_, _ = b.SendMessage(ctx, &bot.SendMessageParams{
+		ChatID: h.cfg.AdminID,
+		Text:   summary,
+	})
+}
+
+func (h *Handler) parseMessage(msg *models.Message) (msgType, fileID, caption string) {
+	switch {
+	case msg.Text != "":
+		return "text", "", msg.Text
+	case len(msg.Photo) > 0:
+		return "photo", msg.Photo[len(msg.Photo)-1].FileID, msg.Caption
+	case msg.Video != nil:
+		return "video", msg.Video.FileID, msg.Caption
+	case msg.Document != nil:
+		return "document", msg.Document.FileID, msg.Caption
+	case msg.Caption != "":
+		return "caption", "", msg.Caption
+	default:
+		return "", "", ""
+	}
+}
+
+// sendToUser отправляет одному пользователю указанное сообщение
+func (h *Handler) sendToUser(
+	ctx context.Context,
+	b *bot.Bot,
+	chatID int64,
+	msgType, fileID, caption string,
+) error {
+	switch msgType {
+	case "text":
+		_, err := b.SendMessage(ctx, &bot.SendMessageParams{ChatID: chatID, Text: caption})
+		return err
+	case "photo":
+		_, err := b.SendPhoto(ctx, &bot.SendPhotoParams{
+			ChatID:  chatID,
+			Photo:   &models.InputFileString{Data: fileID},
+			Caption: caption,
+		})
+		return err
+	case "video":
+		_, err := b.SendVideo(ctx, &bot.SendVideoParams{
+			ChatID:  chatID,
+			Video:   &models.InputFileString{Data: fileID},
+			Caption: caption,
+		})
+		return err
+	case "document":
+		_, err := b.SendDocument(ctx, &bot.SendDocumentParams{
+			ChatID:   chatID,
+			Document: &models.InputFileString{Data: fileID},
+			Caption:  caption,
+		})
+		return err
+	default:
+		return nil
+	}
+}
+
 // DefaultHandler отвечает на любые текстовые сообщения.
 func (h *Handler) DefaultHandler(ctx context.Context, b *bot.Bot, update *models.Update) {
 	if update.Message == nil {
 		return
 	}
+
+	// Инлайн-кнопка с эмодзи и ссылкой
+	markup := &models.InlineKeyboardMarkup{
+		InlineKeyboard: [][]models.InlineKeyboardButton{{
+			{
+				Text: "📲 Открыть MediHub",
+				URL:  "https://t.me/dariger_test_bot/mediHub",
+			},
+		}},
+	}
+
+	// Текст с эмодзи
 	_, err := b.SendMessage(ctx, &bot.SendMessageParams{
-		ChatID: update.Message.Chat.ID,
-		Text:   "Пожалуйста, используйте веб-форму для регистрации.",
+		ChatID:      update.Message.Chat.ID,
+		Text:        "Загляните в MediHub по кнопке ниже 👇",
+		ReplyMarkup: markup,
 	})
 	if err != nil {
-		h.logger.Warn("ошибка отправки сообщения DefaultHandler", zap.Error(err))
+		h.logger.Error("error in send message default handler", zap.Error(err))
 	}
 }
 
@@ -105,8 +231,7 @@ func (h *Handler) InlineHandler(ctx context.Context, b *bot.Bot, callback *model
 		return
 	}
 
-	// Обновляем статус подтверждения (если у вас есть такое поле в БД)
-	// Для простоты пока просто отправляем уведомление
+	// Обновляем статус подтверждения
 	_, err = b.SendMessage(ctx, &bot.SendMessageParams{
 		ChatID: doctorTelegramID,
 		Text:   "Ваша регистрация подтверждена. Вы теперь доктор! 😊",
@@ -125,6 +250,7 @@ func (h *Handler) InlineHandlerWrapper(ctx context.Context, b *bot.Bot, update *
 	h.InlineHandler(ctx, b, update.CallbackQuery)
 }
 
+// DoctorHandler handles doctor registration
 func (h *Handler) DoctorHandler(w http.ResponseWriter, r *http.Request, ctx context.Context, b *bot.Bot) {
 	// CORS
 	if r.Method == http.MethodOptions {
@@ -231,7 +357,7 @@ func (h *Handler) DoctorHandler(w http.ResponseWriter, r *http.Request, ctx cont
 			}
 			// Сохраняем пути
 			switch res.label {
-			case "Профиль фотосы":
+			case "Аватарка":
 				savedPaths["avatar"] = res.path
 			case "Диплом":
 				savedPaths["diploma"] = res.path
@@ -299,231 +425,6 @@ func (h *Handler) DoctorHandler(w http.ResponseWriter, r *http.Request, ctx cont
 			Text:   "Ваша заявка отправлена на рассмотрение. Ожидайте подтверждения.",
 		})
 	}()
-}
-
-// PatientAppointmentHandler обрабатывает заявки от пациентов
-func (h *Handler) PatientAppointmentHandler(w http.ResponseWriter, r *http.Request, ctx context.Context, b *bot.Bot) {
-	// CORS & быстрый ответ
-	w.Header().Set("Access-Control-Allow-Origin", "*")
-	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Accept")
-	if r.Method == http.MethodOptions {
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-		w.WriteHeader(http.StatusOK)
-		return
-	}
-	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-
-	// Парсим форму
-	if err := r.ParseMultipartForm(32 << 20); err != nil {
-		http.Error(w, "Ошибка парсинга формы: "+err.Error(), http.StatusBadRequest)
-		return
-	}
-	userIDStr := r.FormValue("user_id")
-	fullName := r.FormValue("full_name")
-	age := r.FormValue("age")
-	gender := r.FormValue("gender")
-	complaints := r.FormValue("complaints")
-	duration := r.FormValue("duration")
-	rawSpecialty := r.FormValue("specialty")
-	contacts := r.FormValue("contacts")
-	address := r.FormValue("address")
-
-	// читаем фото жалобы
-	var photoData []byte
-	var photoName string
-	if file, hdr, ferr := r.FormFile("complaint_photo"); ferr == nil {
-		defer file.Close()
-		if data, err := io.ReadAll(file); err == nil {
-			photoData = data
-			photoName = hdr.Filename
-		}
-	}
-
-	// возвращаем OK
-	w.WriteHeader(http.StatusOK)
-	w.Write([]byte("OK"))
-
-	go func() {
-		// 1) сохраняем фото
-		var photoPath, fileName string
-		if len(photoData) > 0 {
-			dir := "./patient"
-			if err := os.MkdirAll(dir, 0755); err != nil {
-				h.logger.Error("error in create directory", zap.Error(err))
-			}
-			fn := fmt.Sprintf("patient_%d_%s", time.Now().UnixNano(), photoName)
-			path := filepath.Join(dir, fn)
-			if err := os.WriteFile(path, photoData, 0644); err != nil {
-				h.logger.Warn("Ошибка сохранения фото", zap.Error(err))
-			} else {
-				photoPath, fileName = path, fn
-			}
-		}
-
-		// 2) готовим текст сообщения
-		dispSpec := rawSpecialty
-		if rev, ok := h.reverseSpecialtyMapping[rawSpecialty]; ok {
-			dispSpec = rev
-		}
-		msgText := fmt.Sprintf(
-			"Новая заявка:\n"+
-				"ФИО: %s\nВозраст: %s\nПол: %s\nЖалобы: %s\nДлительность: %s дн.\n"+
-				"Специальность: %s\nКонтакты: %s\nАдрес: %s",
-			fullName, age, gender, complaints, duration,
-			dispSpec, contacts, address,
-		)
-
-		// 3) получаем докторов по специальности из БД
-		doctors, err := h.repo.GetDoctorsBySpecialty(rawSpecialty)
-		if err != nil {
-			h.logger.Error("Ошибка получения докторов", zap.Error(err))
-			return
-		}
-
-		// 4) рассылаем врачам
-		userID, _ := strconv.ParseInt(userIDStr, 10, 64)
-		var f *os.File
-		if photoPath != "" {
-			f, err = os.Open(photoPath)
-			if err != nil {
-				h.logger.Warn("Ошибка открытия файла", zap.Error(err))
-			} else {
-				defer f.Close()
-			}
-		}
-
-		for _, doc := range doctors {
-			cb := fmt.Sprintf("delete_%d_%d", userID, doc.TelegramID)
-			markup := &models.InlineKeyboardMarkup{
-				InlineKeyboard: [][]models.InlineKeyboardButton{{
-					{Text: "✅ Қабылдадым", CallbackData: cb},
-				}},
-			}
-
-			var msgID int
-			if f != nil {
-				f.Seek(0, 0) // Перематываем файл в начало для каждой отправки
-				msg, err := b.SendPhoto(ctx, &bot.SendPhotoParams{
-					ChatID: doc.TelegramID,
-					Photo: &models.InputFileUpload{
-						Filename: fileName,
-						Data:     f,
-					},
-					Caption:     msgText,
-					ReplyMarkup: markup,
-				})
-				if err == nil {
-					msg.ID = msgID
-				} else {
-					h.logger.Warn("Ошибка отправки врачу", zap.Error(err))
-					continue
-				}
-			} else {
-				msg, err := b.SendMessage(ctx, &bot.SendMessageParams{
-					ChatID:      doc.TelegramID,
-					Text:        msgText,
-					ReplyMarkup: markup,
-				})
-				if err == nil {
-					msg.ID = msgID
-				} else {
-					h.logger.Warn("Ошибка отправки врачу", zap.Error(err))
-					continue
-				}
-			}
-			docMsg := repository.DocMsg{
-				ChatID: doc.TelegramID,
-				MsgID:  msgID,
-			}
-
-			if err := h.redisRepo.AddDocMsg(userID, docMsg); err != nil {
-				h.logger.Error("Ошибка сохранения в Redis", zap.Error(err), zap.Int64("userID", userID))
-			}
-		}
-
-		// 5) отправляем в общий чат
-		groupID := int64(-1009876543210)
-		b.SendMessage(ctx, &bot.SendMessageParams{ChatID: groupID, Text: msgText})
-	}()
-}
-
-// DeleteMessageHandler удаляет заявки у других врачей при первом нажатии
-func (h *Handler) DeleteMessageHandler(ctx context.Context, b *bot.Bot, update *models.Update) {
-	parts := strings.Split(update.CallbackQuery.Data, "_")
-	if len(parts) != 3 {
-		b.AnswerCallbackQuery(ctx, &bot.AnswerCallbackQueryParams{
-			CallbackQueryID: update.CallbackQuery.ID,
-			Text:            "Неверные данные",
-		})
-		return
-	}
-	userID, err1 := strconv.ParseInt(parts[1], 10, 64)
-	docChatID, err2 := strconv.ParseInt(parts[2], 10, 64)
-	if err1 != nil || err2 != nil {
-		b.AnswerCallbackQuery(ctx, &bot.AnswerCallbackQueryParams{
-			CallbackQueryID: update.CallbackQuery.ID,
-			Text:            "Неверные данные",
-		})
-		return
-	}
-
-	msgs, err := h.redisRepo.GetDocMsgs(userID)
-	if err != nil {
-		h.logger.Error("Ошибка получения сообщений из Redis", zap.Error(err), zap.Int64("userID", userID))
-		b.AnswerCallbackQuery(ctx, &bot.AnswerCallbackQueryParams{
-			CallbackQueryID: update.CallbackQuery.ID,
-			Text:            "Ошибка обработки",
-		})
-		return
-	}
-
-	for _, dm := range msgs {
-		if dm.ChatID != docChatID {
-			if _, err := b.DeleteMessage(ctx, &bot.DeleteMessageParams{
-				ChatID:    dm.ChatID,
-				MessageID: dm.MsgID,
-			}); err != nil {
-				h.logger.Warn("Ошибка удаления сообщения",
-					zap.Error(err),
-					zap.Int64("chatID", dm.ChatID),
-					zap.Int("msgID", dm.MsgID))
-			}
-		}
-	}
-
-	if err := h.redisRepo.DeleteDocMsgs(userID); err != nil {
-		h.logger.Error("Ошибка удаления из Redis", zap.Error(err), zap.Int64("userID", userID))
-		b.AnswerCallbackQuery(ctx, &bot.AnswerCallbackQueryParams{
-			CallbackQueryID: update.CallbackQuery.ID,
-			Text:            "Ошибка обработки",
-		})
-		return
-	}
-
-	// удаляем собственное приглашение
-	if mq := update.CallbackQuery.Message; mq.Message != nil {
-		b.DeleteMessage(ctx, &bot.DeleteMessageParams{
-			ChatID:    mq.Message.Chat.ID,
-			MessageID: mq.Message.ID,
-		})
-	}
-
-	// убираем spinner
-	b.AnswerCallbackQuery(ctx, &bot.AnswerCallbackQueryParams{
-		CallbackQueryID: update.CallbackQuery.ID,
-		Text:            "Қабылдадым!",
-	})
-
-	// уведомляем врача
-	b.SendMessage(ctx, &bot.SendMessageParams{
-		ChatID: update.CallbackQuery.From.ID,
-		Text:   "Хабарлама сәтті жойылды!",
-	})
-	// уведомляем пациента
-	b.SendMessage(ctx, &bot.SendMessageParams{
-		ChatID: userID,
-		Text:   "Сіздің өтінішіңіз қабылданды, дәрігер жақын арада хабарласатын болады.",
-	})
 }
 
 // GetDoctorHandler handles GET requests to fetch doctor data
@@ -827,9 +728,463 @@ func (h *Handler) UpdateDoctorHandler(w http.ResponseWriter, r *http.Request, ct
 	}
 }
 
+// GetUserStatusHandler handles GET requests to check user status
+func (h *Handler) GetUserStatusHandler(w http.ResponseWriter, r *http.Request) {
+	// CORS headers
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "Accept, Content-Type")
+	w.Header().Set("Content-Type", "application/json")
+
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Extract user ID from URL path
+	pathParts := strings.Split(r.URL.Path, "/")
+	if len(pathParts) < 4 {
+		http.Error(w, "Invalid user ID", http.StatusBadRequest)
+		return
+	}
+
+	userIDStr := pathParts[3]
+	userTelegramID, err := strconv.ParseInt(userIDStr, 10, 64)
+	if err != nil {
+		http.Error(w, "Invalid user ID format", http.StatusBadRequest)
+		return
+	}
+
+	h.logger.Info("Getting user status", zap.Int64("telegram_id", userTelegramID))
+
+	// Get user status using the doctor repository as checker
+	status, err := h.userRepo.GetUserStatus(userTelegramID, h.repo)
+	if err != nil {
+		h.logger.Error("Error getting user status", zap.Error(err))
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	h.logger.Info("User status retrieved",
+		zap.Int64("telegram_id", userTelegramID),
+		zap.Bool("is_doctor", status.IsDoctor),
+		zap.Bool("is_client", status.IsClient),
+		zap.Bool("doctor_agreement", status.DoctorAgreementAccepted),
+		zap.Bool("patient_agreement", status.PatientAgreementAccepted))
+
+	// Send JSON response
+	if err := json.NewEncoder(w).Encode(status); err != nil {
+		h.logger.Error("Error encoding JSON response", zap.Error(err))
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+	}
+}
+
+// SaveUserAgreementHandler handles POST requests to save user agreement
+func (h *Handler) SaveUserAgreementHandler(w http.ResponseWriter, r *http.Request) {
+	// CORS headers
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+	w.Header().Set("Content-Type", "application/json")
+
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Parse JSON body
+	var requestData struct {
+		TelegramID        int64  `json:"telegram_id"`
+		UserType          string `json:"user_type"`
+		AgreementAccepted bool   `json:"agreement_accepted"`
+		Timestamp         string `json:"timestamp"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&requestData); err != nil {
+		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		return
+	}
+
+	// Validate required fields
+	if requestData.TelegramID == 0 || requestData.UserType == "" {
+		http.Error(w, "Missing required fields", http.StatusBadRequest)
+		return
+	}
+
+	// Validate user type
+	if requestData.UserType != "doctor" && requestData.UserType != "patient" {
+		http.Error(w, "Invalid user type", http.StatusBadRequest)
+		return
+	}
+
+	// Save agreement to database
+	if err := h.userRepo.SaveUserAgreement(requestData.TelegramID, requestData.UserType, requestData.AgreementAccepted); err != nil {
+		h.logger.Error("Error saving user agreement", zap.Error(err))
+		http.Error(w, "Failed to save agreement", http.StatusInternalServerError)
+		return
+	}
+
+	h.logger.Info("User agreement saved",
+		zap.Int64("telegram_id", requestData.TelegramID),
+		zap.String("user_type", requestData.UserType),
+		zap.Bool("accepted", requestData.AgreementAccepted))
+
+	// Return success response
+	response := map[string]interface{}{
+		"success": true,
+		"message": "Agreement saved successfully",
+		"data": map[string]interface{}{
+			"telegram_id": requestData.TelegramID,
+			"user_type":   requestData.UserType,
+			"accepted":    requestData.AgreementAccepted,
+			"timestamp":   time.Now(),
+		},
+	}
+
+	w.WriteHeader(http.StatusOK)
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		h.logger.Error("Error encoding JSON response", zap.Error(err))
+	}
+}
+
+// PatientAppointmentHandler handles patient appointment requests
+func (h *Handler) PatientAppointmentHandler(w http.ResponseWriter, r *http.Request, ctx context.Context, b *bot.Bot) {
+	// CORS & быстрый ответ
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Accept")
+	if r.Method == http.MethodOptions {
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+
+	// Парсим форму
+	if err := r.ParseMultipartForm(32 << 20); err != nil {
+		http.Error(w, "Ошибка парсинга формы: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	userIDStr := r.FormValue("user_id")
+	fullName := r.FormValue("full_name")
+	age := r.FormValue("age")
+	gender := r.FormValue("gender")
+	complaints := r.FormValue("complaints")
+	duration := r.FormValue("duration")
+	rawSpecialty := r.FormValue("specialty")
+	contacts := r.FormValue("contacts")
+	address := r.FormValue("address")
+
+	// Parse user ID
+	userID, err := strconv.ParseInt(userIDStr, 10, 64)
+	if err != nil {
+		http.Error(w, "Invalid user ID", http.StatusBadRequest)
+		return
+	}
+
+	// читаем фото жалобы
+	var photoData []byte
+	var photoName string
+	if file, hdr, ferr := r.FormFile("complaint_photo"); ferr == nil {
+		defer file.Close()
+		if data, err := io.ReadAll(file); err == nil {
+			photoData = data
+			photoName = hdr.Filename
+		}
+	}
+
+	// возвращаем OK
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte("OK"))
+
+	go func() {
+		// Save client registration to user repository
+		clientReg := &repository.ClientRegistration{
+			UserID:      userID,
+			Fio:         fullName,
+			Sex:         gender,
+			Problem:     complaints,
+			Period:      duration,
+			MedPersonal: rawSpecialty,
+			Contact:     contacts,
+			Address:     address,
+			Time:        time.Now().Format("2006-01-02 15:04:05"),
+		}
+
+		// Check if client already exists, update or insert
+		exists, err := h.userRepo.ClientExists(userID)
+		if err != nil {
+			h.logger.Error("Error checking client existence", zap.Error(err))
+		}
+
+		if exists {
+			if err := h.userRepo.UpdateClient(clientReg); err != nil {
+				h.logger.Error("Error updating client", zap.Error(err))
+			}
+		} else {
+			if err := h.userRepo.InsertClient(clientReg); err != nil {
+				h.logger.Error("Error inserting client", zap.Error(err))
+			}
+		}
+
+		// 1) сохраняем фото
+		var photoPath, fileName string
+		if len(photoData) > 0 {
+			dir := "./patient"
+			if err := os.MkdirAll(dir, 0755); err != nil {
+				h.logger.Error("error in create directory", zap.Error(err))
+			}
+			fn := fmt.Sprintf("patient_%d_%s", time.Now().UnixNano(), photoName)
+			path := filepath.Join(dir, fn)
+			if err := os.WriteFile(path, photoData, 0644); err != nil {
+				h.logger.Warn("Ошибка сохранения фото", zap.Error(err))
+			} else {
+				photoPath, fileName = path, fn
+			}
+		}
+
+		// 2) готовим текст сообщения
+		dispSpec := rawSpecialty
+		if rev, ok := h.reverseSpecialtyMapping[rawSpecialty]; ok {
+			dispSpec = rev
+		}
+		msgText := fmt.Sprintf(
+			"Новая заявка:\n"+
+				"ФИО: %s\nВозраст: %s\nПол: %s\nЖалобы: %s\nДлительность: %s дн.\n"+
+				"Специальность: %s\nКонтакты: %s\nАдрес: %s",
+			fullName, age, gender, complaints, duration,
+			dispSpec, contacts, address,
+		)
+
+		// 3) получаем докторов по специальности из БД
+		doctors, err := h.repo.GetDoctorsBySpecialty(rawSpecialty)
+		if err != nil {
+			h.logger.Error("Ошибка получения докторов", zap.Error(err))
+			return
+		}
+
+		// 4) рассылаем врачам
+		var f *os.File
+		if photoPath != "" {
+			f, err = os.Open(photoPath)
+			if err != nil {
+				h.logger.Warn("Ошибка открытия файла", zap.Error(err))
+			} else {
+				defer f.Close()
+			}
+		}
+
+		for _, doc := range doctors {
+			cb := fmt.Sprintf("delete_%d_%d", userID, doc.TelegramID)
+			markup := &models.InlineKeyboardMarkup{
+				InlineKeyboard: [][]models.InlineKeyboardButton{{
+					{Text: "✅ Қабылдадым", CallbackData: cb},
+				}},
+			}
+
+			var msgID int
+			if f != nil {
+				f.Seek(0, 0) // Перематываем файл в начало для каждой отправки
+				msg, err := b.SendPhoto(ctx, &bot.SendPhotoParams{
+					ChatID: doc.TelegramID,
+					Photo: &models.InputFileUpload{
+						Filename: fileName,
+						Data:     f,
+					},
+					Caption:     msgText,
+					ReplyMarkup: markup,
+				})
+				if err == nil {
+					msgID = msg.ID
+				} else {
+					h.logger.Warn("Ошибка отправки врачу", zap.Error(err))
+					continue
+				}
+			} else {
+				msg, err := b.SendMessage(ctx, &bot.SendMessageParams{
+					ChatID:      doc.TelegramID,
+					Text:        msgText,
+					ReplyMarkup: markup,
+				})
+				if err == nil {
+					msgID = msg.ID
+				} else {
+					h.logger.Warn("Ошибка отправки врачу", zap.Error(err))
+					continue
+				}
+			}
+
+			docMsg := repository.DocMsg{
+				ChatID: doc.TelegramID,
+				MsgID:  msgID,
+			}
+
+			if err := h.redisRepo.AddDocMsg(userID, docMsg); err != nil {
+				h.logger.Error("Ошибка сохранения в Redis", zap.Error(err), zap.Int64("userID", userID))
+			}
+		}
+
+		// 5) отправляем в общий чат
+		groupID := int64(-1009876543210)
+		b.SendMessage(ctx, &bot.SendMessageParams{ChatID: groupID, Text: msgText})
+	}()
+}
+
+// DeleteMessageHandler удаляет заявки у других врачей при первом нажатии
+func (h *Handler) DeleteMessageHandler(ctx context.Context, b *bot.Bot, update *models.Update) {
+	parts := strings.Split(update.CallbackQuery.Data, "_")
+	if len(parts) != 3 {
+		b.AnswerCallbackQuery(ctx, &bot.AnswerCallbackQueryParams{
+			CallbackQueryID: update.CallbackQuery.ID,
+			Text:            "Неверные данные",
+		})
+		return
+	}
+	userID, err1 := strconv.ParseInt(parts[1], 10, 64)
+	docChatID, err2 := strconv.ParseInt(parts[2], 10, 64)
+	if err1 != nil || err2 != nil {
+		b.AnswerCallbackQuery(ctx, &bot.AnswerCallbackQueryParams{
+			CallbackQueryID: update.CallbackQuery.ID,
+			Text:            "Неверные данные",
+		})
+		return
+	}
+
+	msgs, err := h.redisRepo.GetDocMsgs(userID)
+	if err != nil {
+		h.logger.Error("Ошибка получения сообщений из Redis", zap.Error(err), zap.Int64("userID", userID))
+		b.AnswerCallbackQuery(ctx, &bot.AnswerCallbackQueryParams{
+			CallbackQueryID: update.CallbackQuery.ID,
+			Text:            "Ошибка обработки",
+		})
+		return
+	}
+
+	for _, dm := range msgs {
+		if dm.ChatID != docChatID {
+			if _, err := b.DeleteMessage(ctx, &bot.DeleteMessageParams{
+				ChatID:    dm.ChatID,
+				MessageID: dm.MsgID,
+			}); err != nil {
+				h.logger.Warn("Ошибка удаления сообщения",
+					zap.Error(err),
+					zap.Int64("chatID", dm.ChatID),
+					zap.Int("msgID", dm.MsgID))
+			}
+		}
+	}
+
+	if err := h.redisRepo.DeleteDocMsgs(userID); err != nil {
+		h.logger.Error("Ошибка удаления из Redis", zap.Error(err), zap.Int64("userID", userID))
+		b.AnswerCallbackQuery(ctx, &bot.AnswerCallbackQueryParams{
+			CallbackQueryID: update.CallbackQuery.ID,
+			Text:            "Ошибка обработки",
+		})
+		return
+	}
+
+	// удаляем собственное приглашение
+	/*
+		if mq := update.CallbackQuery.Message; mq.Message != nil {
+				b.DeleteMessage(ctx, &bot.DeleteMessageParams{
+					ChatID:    mq.Message.Chat.ID,
+					MessageID: mq.Message.ID,
+				})
+			}
+	*/
+
+	// убираем spinner
+	b.AnswerCallbackQuery(ctx, &bot.AnswerCallbackQueryParams{
+		CallbackQueryID: update.CallbackQuery.ID,
+		Text:            "Қабылдадым!",
+	})
+
+	// уведомляем врача
+	/*
+		b.SendMessage(ctx, &bot.SendMessageParams{
+				ChatID: update.CallbackQuery.From.ID,
+				Text:   "Хабарлама сәтті жойылды!",
+			})
+	*/
+
+	// уведомляем пациента
+	b.SendMessage(ctx, &bot.SendMessageParams{
+		ChatID: userID,
+		Text:   "Сіздің өтінішіңіз қабылданды, дәрігер жақын арада хабарласатын болады.",
+	})
+
+	doc, err := h.repo.GetDoctorByTelegramID(update.CallbackQuery.From.ID)
+	if err != nil {
+		h.logger.Error("Ошибка получения данных доктора", zap.Error(err))
+	} else {
+		var f *os.File
+		photoPath := *doc.AvatarPath
+		caption := fmt.Sprintf("Ваш врач: %s\nКонтакт: %s", *doc.FullName, *doc.Contact)
+		if photoPath != "" {
+			f, err = os.Open(photoPath)
+			if err != nil {
+				h.logger.Error("error in open doctor ava", zap.Error(err))
+			}
+		}
+		if _, err := b.SendPhoto(ctx, &bot.SendPhotoParams{
+			ChatID: userID,
+			Photo: &models.InputFileUpload{
+				Filename: photoPath,
+				Data:     f,
+			}, // путь к файлу ./ava/…
+			Caption: caption,
+		}); err != nil {
+			h.logger.Error("Ошибка отправки фото доктора пациенту",
+				zap.Error(err),
+				zap.String("photoPath", photoPath),
+			)
+		}
+	}
+}
+
 // StartWebServer starts the HTTP server with all routes
 func (h *Handler) StartWebServer(botToken string, ctx context.Context, b *bot.Bot) {
-	// Existing routes
+	// User status and agreement routes
+	http.HandleFunc("/api/user/", func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/agreement") {
+			// Handle agreement endpoint
+			if r.Method == http.MethodOptions {
+				w.Header().Set("Access-Control-Allow-Origin", "*")
+				w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
+				w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+				w.WriteHeader(http.StatusOK)
+				return
+			}
+			h.SaveUserAgreementHandler(w, r)
+		} else {
+			// Handle user status endpoint
+			h.GetUserStatusHandler(w, r)
+		}
+	})
+
+	// Separate agreement endpoint for clarity
+	http.HandleFunc("/api/user/agreement", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodOptions {
+			w.Header().Set("Access-Control-Allow-Origin", "*")
+			w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		h.SaveUserAgreementHandler(w, r)
+	})
+
+	// Doctor routes
 	http.HandleFunc("/doctor", func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodPost:
@@ -851,6 +1206,7 @@ func (h *Handler) StartWebServer(botToken string, ctx context.Context, b *bot.Bo
 		h.GetDoctorHandler(w, r)
 	})
 
+	// Patient appointment route
 	http.HandleFunc("/api/open", func(w http.ResponseWriter, r *http.Request) {
 		h.PatientAppointmentHandler(w, r, ctx, b)
 	})
@@ -859,9 +1215,22 @@ func (h *Handler) StartWebServer(botToken string, ctx context.Context, b *bot.Bo
 	fileServer := http.FileServer(http.Dir("."))
 	http.Handle("/files/", http.StripPrefix("/files/", fileServer))
 
-	// Serve the update mini app
+	// Serve PDF files from offerta directory
+	http.Handle("/offerta/", http.StripPrefix("/offerta/", http.FileServer(http.Dir("./offerta/"))))
+
+	// Welcome  page route
+	http.HandleFunc("/welcome", func(w http.ResponseWriter, r *http.Request) {
+		templatePath := "./server/templates/index.html"
+		if _, err := os.Stat(templatePath); os.IsNotExist(err) {
+			h.logger.Error("Debug file not found", zap.String("path", templatePath))
+			http.Error(w, "Debug page not found", http.StatusNotFound)
+			return
+		}
+		http.ServeFile(w, r, templatePath)
+	})
+
+	// Mini app routes
 	http.HandleFunc("/update-doctor", func(w http.ResponseWriter, r *http.Request) {
-		// Check if the file exists in server/templates
 		templatePath := "./server/templates/update-doctor.html"
 		if _, err := os.Stat(templatePath); os.IsNotExist(err) {
 			h.logger.Error("Template file not found", zap.String("path", templatePath))
@@ -891,15 +1260,46 @@ func (h *Handler) StartWebServer(botToken string, ctx context.Context, b *bot.Bo
 		http.ServeFile(w, r, templatePath)
 	})
 
+	// Debug test page route
+	http.HandleFunc("/debug", func(w http.ResponseWriter, r *http.Request) {
+		debugPath := "./debug.html"
+		if _, err := os.Stat(debugPath); os.IsNotExist(err) {
+			h.logger.Error("Debug file not found", zap.String("path", debugPath))
+			http.Error(w, "Debug page not found", http.StatusNotFound)
+			return
+		}
+		http.ServeFile(w, r, debugPath)
+	})
+
+	// Main index route - serve the new index.html
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/" {
 			http.NotFound(w, r)
 			return
 		}
-		http.ServeFile(w, r, "index.html")
+
+		// Serve the main index.html file
+		indexPath := "./index.html"
+		if _, err := os.Stat(indexPath); os.IsNotExist(err) {
+			h.logger.Error("Index file not found", zap.String("path", indexPath))
+			http.Error(w, "Index not found", http.StatusNotFound)
+			return
+		}
+		http.ServeFile(w, r, indexPath)
 	})
 
 	addr := ":8080"
 	h.logger.Info("веб-сервер запущен", zap.String("addr", addr))
 	log.Fatal(http.ListenAndServe(addr, nil))
+}
+
+// Close closes all repository connections
+func (h *Handler) Close() error {
+	if h.userRepo != nil {
+		if err := h.userRepo.Close(); err != nil {
+			h.logger.Error("Error closing user repository", zap.Error(err))
+			return err
+		}
+	}
+	return nil
 }
