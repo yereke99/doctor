@@ -1,0 +1,1272 @@
+<!DOCTYPE html>
+<html lang="kz">
+<head>
+  <meta charset="UTF-8">
+  <title>Скрининг тесті - MedHub</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <style>
+    :root {
+      /* Light theme */
+      --bg-primary: #f0f8ff;
+      --bg-secondary: #ffffff;
+      --bg-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      --card-bg: rgba(255, 255, 255, 0.98);
+      --card-border: rgba(0, 0, 0, 0.06);
+      --text-primary: #1a202c;
+      --text-secondary: #4a5568;
+      --text-muted: #718096;
+      --accent-primary: #667eea;
+      --accent-secondary: #48bb78;
+      --accent-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      --success-gradient: linear-gradient(135deg, #48bb78 0%, #38a169 100%);
+      --warning-gradient: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+      --danger-gradient: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+      --input-bg: #f7fafc;
+      --input-border: #e2e8f0;
+      --input-focus: #667eea;
+      --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.1);
+      --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.15);
+      --shadow-lg: 0 10px 25px rgba(0, 0, 0, 0.2);
+      --shadow-xl: 0 20px 40px rgba(0, 0, 0, 0.25);
+      --modal-bg: rgba(0, 0, 0, 0.5);
+    }
+
+    [data-theme="dark"] {
+      /* Dark theme */
+      --bg-primary: #0f172a;
+      --bg-secondary: #1e293b;
+      --bg-gradient: linear-gradient(135deg, #1e3a8a 0%, #581c87 100%);
+      --card-bg: rgba(30, 41, 59, 0.98);
+      --card-border: rgba(255, 255, 255, 0.06);
+      --text-primary: #f1f5f9;
+      --text-secondary: #cbd5e1;
+      --text-muted: #94a3b8;
+      --accent-primary: #818cf8;
+      --accent-secondary: #34d399;
+      --accent-gradient: linear-gradient(135deg, #818cf8 0%, #6366f1 100%);
+      --success-gradient: linear-gradient(135deg, #34d399 0%, #10b981 100%);
+      --warning-gradient: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
+      --danger-gradient: linear-gradient(135deg, #f87171 0%, #ef4444 100%);
+      --input-bg: #1e293b;
+      --input-border: #334155;
+      --input-focus: #818cf8;
+      --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.3);
+      --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
+      --shadow-lg: 0 10px 25px rgba(0, 0, 0, 0.5);
+      --shadow-xl: 0 20px 40px rgba(0, 0, 0, 0.6);
+      --modal-bg: rgba(0, 0, 0, 0.7);
+    }
+
+    * { 
+      box-sizing: border-box; 
+      margin: 0; 
+      padding: 0; 
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Inter', sans-serif;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      position: relative;
+      transition: all 0.3s ease;
+      overflow-x: hidden;
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    body::before {
+      content: '';
+      position: fixed;
+      top: -50%;
+      left: -50%;
+      width: 200%;
+      height: 200%;
+      background: var(--bg-gradient);
+      opacity: 0.03;
+      z-index: -2;
+      animation: gradientAnimation 25s ease-in-out infinite;
+    }
+
+    @keyframes gradientAnimation {
+      0%, 100% { transform: rotate(0deg); }
+      33% { transform: rotate(120deg); }
+      66% { transform: rotate(240deg); }
+    }
+
+    .lang-switch {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      display: flex;
+      gap: 8px;
+      z-index: 1000;
+    }
+
+    .lang-switch button {
+      background: var(--card-bg);
+      color: var(--text-primary);
+      border: 1px solid var(--card-border);
+      border-radius: 50px;
+      padding: 8px 16px;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 0.85rem;
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      transition: all 0.3s ease;
+      box-shadow: var(--shadow-sm);
+    }
+
+    .lang-switch button.active {
+      background: var(--accent-gradient);
+      color: white;
+      border-color: transparent;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 600px;
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 24px;
+      box-shadow: var(--shadow-xl);
+      padding: 32px;
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      position: relative;
+      overflow: hidden;
+      transition: all 0.4s ease;
+      animation: fadeIn 0.6s ease-out;
+    }
+
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+        transform: translateY(30px) scale(0.95);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+      }
+    }
+
+    .container::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 4px;
+      background: var(--accent-gradient);
+      animation: shimmer 2s ease-in-out infinite;
+    }
+
+    @keyframes shimmer {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.7; }
+    }
+
+    .header {
+      text-align: center;
+      margin-bottom: 32px;
+    }
+
+    .header h1 {
+      font-size: 2rem;
+      font-weight: 800;
+      background: var(--accent-gradient);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      margin-bottom: 8px;
+    }
+
+    .header p {
+      color: var(--text-secondary);
+      font-size: 1.1rem;
+    }
+
+    .progress-bar {
+      background: var(--input-bg);
+      border-radius: 10px;
+      height: 8px;
+      margin-bottom: 24px;
+      overflow: hidden;
+    }
+
+    .progress-fill {
+      height: 100%;
+      background: var(--accent-gradient);
+      border-radius: 10px;
+      transition: width 0.3s ease;
+      width: 0%;
+    }
+
+    .question-container {
+      margin-bottom: 24px;
+      animation: slideIn 0.5s ease-out;
+    }
+
+    @keyframes slideIn {
+      from {
+        opacity: 0;
+        transform: translateX(20px);
+      }
+      to {
+        opacity: 1;
+        transform: translateX(0);
+      }
+    }
+
+    .question-number {
+      color: var(--accent-primary);
+      font-weight: 600;
+      font-size: 0.9rem;
+      margin-bottom: 8px;
+    }
+
+    .question-text {
+      font-size: 1.1rem;
+      font-weight: 600;
+      color: var(--text-primary);
+      margin-bottom: 16px;
+      line-height: 1.5;
+    }
+
+    .options {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .option {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 16px;
+      background: var(--input-bg);
+      border: 2px solid var(--input-border);
+      border-radius: 12px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .option::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: -100%;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(90deg, transparent, rgba(102, 126, 234, 0.1), transparent);
+      transition: left 0.3s ease;
+    }
+
+    .option:hover {
+      border-color: var(--accent-primary);
+      transform: translateY(-2px);
+      box-shadow: var(--shadow-md);
+    }
+
+    .option:hover::before {
+      left: 100%;
+    }
+
+    .option.selected {
+      border-color: var(--accent-primary);
+      background: rgba(102, 126, 234, 0.1);
+    }
+
+    .option input[type="radio"],
+    .option input[type="checkbox"] {
+      width: 20px;
+      height: 20px;
+      accent-color: var(--accent-primary);
+      cursor: pointer;
+    }
+
+    .option label {
+      flex: 1;
+      cursor: pointer;
+      font-weight: 500;
+      color: var(--text-primary);
+    }
+
+    .input-group {
+      margin-bottom: 16px;
+    }
+
+    .input-group label {
+      display: block;
+      font-weight: 600;
+      color: var(--text-secondary);
+      margin-bottom: 8px;
+      font-size: 0.95rem;
+    }
+
+    .input-group input {
+      width: 100%;
+      padding: 12px 16px;
+      border: 2px solid var(--input-border);
+      border-radius: 12px;
+      background: var(--input-bg);
+      color: var(--text-primary);
+      font-size: 1rem;
+      transition: all 0.3s ease;
+    }
+
+    .input-group input:focus {
+      outline: none;
+      border-color: var(--accent-primary);
+      box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.1);
+    }
+
+    .navigation {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 32px;
+      gap: 16px;
+    }
+
+    .btn {
+      padding: 12px 24px;
+      border: none;
+      border-radius: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      position: relative;
+      overflow: hidden;
+      font-size: 1rem;
+    }
+
+    .btn::before {
+      content: '';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 0;
+      height: 0;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.2);
+      transform: translate(-50%, -50%);
+      transition: width 0.6s, height 0.6s;
+    }
+
+    .btn:hover::before {
+      width: 300px;
+      height: 300px;
+    }
+
+    .btn-primary {
+      background: var(--accent-gradient);
+      color: white;
+      box-shadow: var(--shadow-md);
+    }
+
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: var(--shadow-lg);
+    }
+
+    .btn-primary:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .btn-secondary {
+      background: var(--input-bg);
+      color: var(--text-primary);
+      border: 1px solid var(--input-border);
+    }
+
+    .btn-secondary:hover {
+      background: var(--card-bg);
+      transform: translateY(-2px);
+    }
+
+    .results {
+      text-align: center;
+      padding: 40px 20px;
+    }
+
+    .results-icon {
+      font-size: 4rem;
+      margin-bottom: 24px;
+      animation: bounce 2s ease-in-out infinite;
+    }
+
+    @keyframes bounce {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-10px); }
+    }
+
+    .results h2 {
+      font-size: 1.8rem;
+      font-weight: 700;
+      color: var(--accent-primary);
+      margin-bottom: 16px;
+    }
+
+    .results p {
+      color: var(--text-secondary);
+      font-size: 1.1rem;
+      margin-bottom: 24px;
+    }
+
+    .risk-level {
+      display: inline-block;
+      padding: 8px 16px;
+      border-radius: 20px;
+      font-weight: 600;
+      margin-bottom: 24px;
+    }
+
+    .risk-low {
+      background: rgba(72, 187, 120, 0.2);
+      color: #059669;
+    }
+
+    .risk-medium {
+      background: rgba(245, 158, 11, 0.2);
+      color: #d97706;
+    }
+
+    .risk-high {
+      background: rgba(239, 68, 68, 0.2);
+      color: #dc2626;
+    }
+
+    .recommendations {
+      background: var(--input-bg);
+      border-radius: 16px;
+      padding: 24px;
+      margin-top: 24px;
+      text-align: left;
+    }
+
+    .recommendations h3 {
+      color: var(--accent-primary);
+      margin-bottom: 16px;
+      font-size: 1.2rem;
+    }
+
+    .recommendations ul {
+      list-style: none;
+      padding: 0;
+    }
+
+    .recommendations li {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      margin-bottom: 12px;
+      color: var(--text-secondary);
+    }
+
+    .recommendations li::before {
+      content: '✓';
+      color: var(--accent-secondary);
+      font-weight: 600;
+      margin-top: 2px;
+    }
+
+    .hidden {
+      display: none !important;
+    }
+
+    /* Loading state */
+    .loading {
+      text-align: center;
+      padding: 40px;
+      color: var(--text-muted);
+    }
+
+    .loading::after {
+      content: '';
+      display: inline-block;
+      width: 40px;
+      height: 40px;
+      margin: 20px auto;
+      border: 3px solid var(--input-border);
+      border-top-color: var(--accent-primary);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    /* Mobile optimizations */
+    @media (max-width: 480px) {
+      body {
+        padding: 12px;
+      }
+
+      .lang-switch {
+        top: 12px;
+        right: 12px;
+      }
+
+      .container {
+        padding: 24px 20px;
+        border-radius: 20px;
+        max-width: 100%;
+      }
+
+      .header h1 {
+        font-size: 1.5rem;
+      }
+
+      .header p {
+        font-size: 1rem;
+      }
+
+      .question-text {
+        font-size: 1rem;
+      }
+
+      .option {
+        padding: 14px;
+      }
+
+      .navigation {
+        flex-direction: column;
+        gap: 12px;
+      }
+
+      .btn {
+        width: 100%;
+        padding: 14px 24px;
+      }
+
+      .results-icon {
+        font-size: 3rem;
+      }
+
+      .results h2 {
+        font-size: 1.5rem;
+      }
+    }
+
+    /* Reduced motion */
+    @media (prefers-reduced-motion: reduce) {
+      * {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+      }
+    }
+  </style>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+</head>
+<body>
+  <div class="lang-switch">
+    <button onclick="setLang('kz')" id="lang-kz" class="active">ҚАЗ</button>
+    <button onclick="setLang('ru')" id="lang-ru">РУС</button>
+  </div>
+
+  <div class="container">
+    <div class="header">
+      <h1 id="title">Скрининг тесті</h1>
+      <p id="subtitle">Денсаулық жағдайыңызды бағалау</p>
+    </div>
+
+    <div class="progress-bar">
+      <div class="progress-fill" id="progressFill"></div>
+    </div>
+
+    <div id="questionContainer" class="question-container">
+      <!-- Questions will be dynamically loaded here -->
+    </div>
+
+    <div class="navigation">
+      <button class="btn btn-secondary" id="prevBtn" onclick="previousQuestion()" disabled>
+        <span id="btn-prev">Артқа</span>
+      </button>
+      <button class="btn btn-primary" id="nextBtn" onclick="nextQuestion()">
+        <span id="btn-next">Келесі</span>
+      </button>
+    </div>
+
+    <div id="results" class="results hidden">
+      <div class="results-icon">🏥</div>
+      <h2 id="results-title">Тест аяқталды!</h2>
+      <p id="results-text">Сіздің жауаптарыңыз дәрігерге жіберілді.</p>
+      <div id="riskLevel" class="risk-level"></div>
+      
+      <div class="recommendations">
+        <h3 id="recommendations-title">Ұсыныстар:</h3>
+        <ul id="recommendationsList">
+          <!-- Recommendations will be populated here -->
+        </ul>
+      </div>
+
+      <button class="btn btn-primary" onclick="submitResults()" id="submitBtn">
+        <span id="btn-submit">Нәтижелерді жіберу</span>
+      </button>
+    </div>
+
+    <div id="loading" class="loading hidden">
+      <div id="loading-text">Жіберілуде...</div>
+    </div>
+  </div>
+
+  <script>
+    // Translations
+    const translations = {
+      kz: {
+        title: 'Скрининг тесті',
+        subtitle: 'Денсаулық жағдайыңызды бағалау',
+        'btn-prev': 'Артқа',
+        'btn-next': 'Келесі',
+        'btn-finish': 'Аяқтау',
+        'btn-submit': 'Нәтижелерді жіберу',
+        'results-title': 'Тест аяқталды!',
+        'results-text': 'Сіздің жауаптарыңыз дәрігерге жіберілді.',
+        'recommendations-title': 'Ұсыныстар:',
+        'loading-text': 'Жіберілуде...',
+        'risk-low': 'Төмен қауіп',
+        'risk-medium': 'Орташа қауіп',
+        'risk-high': 'Жоғары қауіп',
+        'submit-success': 'Нәтижелер сәтті жіберілді!',
+        'submit-error': 'Жіберу кезінде қате орын алды.'
+      },
+      ru: {
+        title: 'Скрининг тест',
+        subtitle: 'Оценка состояния здоровья',
+        'btn-prev': 'Назад',
+        'btn-next': 'Далее',
+        'btn-finish': 'Завершить',
+        'btn-submit': 'Отправить результаты',
+        'results-title': 'Тест завершен!',
+        'results-text': 'Ваши ответы отправлены врачу.',
+        'recommendations-title': 'Рекомендации:',
+        'loading-text': 'Отправка...',
+        'risk-low': 'Низкий риск',
+        'risk-medium': 'Средний риск',
+        'risk-high': 'Высокий риск',
+        'submit-success': 'Результаты успешно отправлены!',
+        'submit-error': 'Ошибка при отправке.'
+      }
+    };
+
+    // Questions data based on the provided document
+    const questions = {
+      kz: [
+        {
+          id: 1,
+          text: "Жасыңыз бен жынысыңыз",
+          type: "multiple",
+          options: [
+            { id: "age_30", text: "Маған 30 жас немесе одан көп", points: 1 },
+            { id: "gender_male", text: "Мен ерекшемін", points: 1 },
+            { id: "gender_female", text: "Мен әйелмін", points: 0 }
+          ],
+      ru: [
+        {
+          id: 1,
+          text: "Ваш возраст и пол",
+          type: "multiple",
+          options: [
+            { id: "age_30", text: "Мне 30 лет или больше", points: 1 },
+            { id: "gender_male", text: "Я мужчина", points: 1 },
+            { id: "gender_female", text: "Я женщина", points: 0 }
+          ]
+        },
+        {
+          id: 2,
+          text: "Рост и вес (для расчёта ИМТ)",
+          type: "input",
+          fields: [
+            { id: "height", label: "Мой рост (см)", type: "number", placeholder: "180" },
+            { id: "weight", label: "Мой вес (кг)", type: "number", placeholder: "86" }
+          ]
+        },
+        {
+          id: 3,
+          text: "Наследственность",
+          type: "multiple",
+          options: [
+            { id: "family_cancer", text: "У близких родственников был рак", points: 2 },
+            { id: "family_cardio", text: "У близких родственников был инфаркт или инсульт до 60 лет", points: 2 }
+          ]
+        },
+        {
+          id: 4,
+          text: "Хронические заболевания",
+          type: "single",
+          options: [
+            { id: "hypertension", text: "Повышенное артериальное давление", points: 2 },
+            { id: "diabetes", text: "Сахарный диабет", points: 3 },
+            { id: "cholesterol", text: "Повышенный холестерин", points: 2 },
+            { id: "no_chronic", text: "Нет хронических заболеваний", points: 0 }
+          ]
+        },
+        {
+          id: 5,
+          text: "Жалобы со стороны ЖКТ",
+          type: "multiple",
+          options: [
+            { id: "blood_stool", text: "Кровь в стуле", points: 3 },
+            { id: "constipation", text: "Частые запоры (менее 3 дефекаций в неделю)", points: 2 },
+            { id: "heartburn", text: "Изжога 2 и более раз в неделю", points: 2 },
+            { id: "nausea", text: "Тошнота или рвота без причины", points: 2 },
+            { id: "unexplained_pain", text: "Необъяснимая боль (живот, грудная клетка, малый таз)", points: 2 }
+          ]
+        },
+        {
+          id: 6,
+          text: "Вредные привычки - Курение",
+          type: "single",
+          options: [
+            { id: "smoke_regular", text: "Курю регулярно", points: 3 },
+            { id: "no_smoke", text: "Не курю", points: 0 }
+          ]
+        },
+        {
+          id: 7,
+          text: "Частота употребления алкоголя",
+          type: "single",
+          options: [
+            { id: "alcohol_never", text: "Никогда или крайне редко (реже 1 раза в месяц)", points: 0 },
+            { id: "alcohol_rare", text: "Редко/умеренно (1-2 раза в месяц)", points: 1 },
+            { id: "alcohol_regular", text: "Регулярно, но в пределах нормы (1-2 раза в неделю)", points: 2 },
+            { id: "alcohol_frequent", text: "Часто (3 и более раз в неделю)", points: 3 }
+          ]
+        },
+        {
+          id: 8,
+          text: "Образ жизни",
+          type: "multiple",
+          options: [
+            { id: "low_activity", text: "Занимаюсь физической активностью менее 2 раз в неделю", points: 2 },
+            { id: "night_work", text: "Работаю в ночные смены", points: 1 },
+            { id: "stress_work", text: "Работаю в условиях стресса", points: 2 },
+            { id: "harmful_work", text: "Работаю с вредными веществами (химия, пыль и т.п.)", points: 2 }
+          ]
+        },
+        {
+          id: 9,
+          text: "Другие признаки",
+          type: "multiple",
+          options: [
+            { id: "fatigue", text: "Частая усталость / слабость без причины", points: 2 },
+            { id: "fever", text: "Температура выше 37,5° без симптомов инфекции", points: 3 },
+            { id: "weight_loss", text: "Резкое похудение за последние месяцы без диеты", points: 3 }
+          ]
+        }
+      ]
+        },
+        {
+          id: 2,
+          text: "Бойыңыз бен салмағыңыз",
+          type: "input",
+          fields: [
+            { id: "height", label: "Бойым (см)", type: "number", placeholder: "180" },
+            { id: "weight", label: "Салмағым (кг)", type: "number", placeholder: "86" }
+          ]
+        },
+        {
+          id: 3,
+          text: "Тұқым қуалаушылық",
+          type: "multiple",
+          options: [
+            { id: "family_cancer", text: "Жақын туыстарымда қатерлі ісік болған", points: 2 },
+            { id: "family_cardio", text: "Жақын туыстарымда 60 жасқа дейін жүрек соғысы немесе инсульт болған", points: 2 }
+          ]
+        },
+        {
+          id: 4,
+          text: "Созылмалы аурулар",
+          type: "single",
+          options: [
+            { id: "hypertension", text: "Жоғары артериялық қысым", points: 2 },
+            { id: "diabetes", text: "Қант диабеті", points: 3 },
+            { id: "cholesterol", text: "Жоғары холестерин", points: 2 },
+            { id: "no_chronic", text: "Созылмалы аурулар жоқ", points: 0 }
+          ]
+        },
+        {
+          id: 5,
+          text: "Асқорыту жүйесінен шағымдар",
+          type: "multiple",
+          options: [
+            { id: "blood_stool", text: "Нәжісте қан", points: 3 },
+            { id: "constipation", text: "Жиі қабыздық (аптасына 3 реттен аз дәрет шығару)", points: 2 },
+            { id: "heartburn", text: "Аптасына 2 рет немесе одан көп өт ауруы", points: 2 },
+            { id: "nausea", text: "Себепсіз жүрек айну немесе құсу", points: 2 },
+            { id: "unexplained_pain", text: "Түсініксіз ауырсыну (іш, кеуде қуысы, кіші жамбас)", points: 2 }
+          ]
+        },
+        {
+          id: 6,
+          text: "Зиянды әдеттер - Темекі",
+          type: "single",
+          options: [
+            { id: "smoke_regular", text: "Үнемі темекі тартамын", points: 3 },
+            { id: "no_smoke", text: "Темекі тартпаймын", points: 0 }
+          ]
+        },
+        {
+          id: 7,
+          text: "Алкоголь қолдану жиілігі",
+          type: "single",
+          options: [
+            { id: "alcohol_never", text: "Ешқашан немесе өте сирек (айына 1 реттен сирек)", points: 0 },
+            { id: "alcohol_rare", text: "Сирек/орташа (айына 1-2 рет)", points: 1 },
+            { id: "alcohol_regular", text: "Үнемі, бірақ норма шегінде (аптасына 1-2 рет)", points: 2 },
+            { id: "alcohol_frequent", text: "Жиі (аптасына 3 рет немесе одан көп)", points: 3 }
+          ]
+        },
+        {
+          id: 8,
+          text: "Өмір салты",
+          type: "multiple",
+          options: [
+            { id: "low_activity", text: "Аптасына 2 реттен аз дене шынықтырумен айналысамын", points: 2 },
+            { id: "night_work", text: "Түнгі ауысымда жұмыс істеймін", points: 1 },
+            { id: "stress_work", text: "Стресс жағдайында жұмыс істеймін", points: 2 },
+            { id: "harmful_work", text: "Зиянды заттармен жұмыс істеймін (химия, шаң т.б.)", points: 2 }
+          ]
+        },
+        {
+          id: 9,
+          text: "Басқа белгілер",
+          type: "multiple",
+          options: [
+            { id: "fatigue", text: "Себепсіз жиі шаршау/әлсіздік", points: 2 },
+            { id: "fever", text: "Жұқпалы ауру белгілерісіз 37,5°-тан жоғары температура", points: 3 },
+            { id: "weight_loss", text: "Диетасыз соңғы айларда күрт арықтау", points: 3 }
+          ]
+        }
+      ]
+    };
+
+    // Global variables
+    let currentLang = 'kz';
+    let currentQuestionIndex = 0;
+    let answers = {};
+    let userTelegramID = null;
+
+    // Automatic theme management
+    function detectSystemTheme() {
+      const hour = new Date().getHours();
+      const isDark = hour >= 20 || hour < 6;
+      return isDark ? 'dark' : 'light';
+    }
+
+    function applyTheme(theme) {
+      document.documentElement.setAttribute('data-theme', theme);
+    }
+
+    // Initialize theme
+    let currentTheme = detectSystemTheme();
+    applyTheme(currentTheme);
+
+    setInterval(() => {
+      const newTheme = detectSystemTheme();
+      if (newTheme !== currentTheme) {
+        currentTheme = newTheme;
+        applyTheme(currentTheme);
+      }
+    }, 60000);
+
+    // Telegram WebApp initialization
+    Telegram.WebApp.ready();
+    Telegram.WebApp.expand();
+
+    const user = Telegram.WebApp.initDataUnsafe?.user;
+    if (user) {
+      userTelegramID = user.id;
+    }
+
+    if (Telegram.WebApp.colorScheme) {
+      currentTheme = Telegram.WebApp.colorScheme;
+      applyTheme(currentTheme);
+    }
+
+    Telegram.WebApp.onEvent('themeChanged', function() {
+      if (Telegram.WebApp.colorScheme) {
+        currentTheme = Telegram.WebApp.colorScheme;
+        applyTheme(currentTheme);
+      }
+    });
+
+    // Language switching
+    function setLang(lang) {
+      currentLang = lang;
+      document.querySelectorAll('.lang-switch button').forEach(btn => {
+        btn.classList.remove('active');
+      });
+      document.getElementById('lang-' + lang).classList.add('active');
+      
+      updateTexts();
+      renderQuestion();
+    }
+
+    function updateTexts() {
+      const t = translations[currentLang];
+      
+      Object.keys(t).forEach(key => {
+        const element = document.getElementById(key);
+        if (element) {
+          element.textContent = t[key];
+        }
+      });
+    }
+
+    // Question rendering
+    function renderQuestion() {
+      const questionData = questions[currentLang][currentQuestionIndex];
+      const container = document.getElementById('questionContainer');
+      
+      container.innerHTML = `
+        <div class="question-number">${questionData.id} / ${questions[currentLang].length}</div>
+        <div class="question-text">${questionData.text}</div>
+        ${renderQuestionContent(questionData)}
+      `;
+
+      updateProgress();
+      updateNavigation();
+    }
+
+    function renderQuestionContent(questionData) {
+      if (questionData.type === 'single') {
+        return `
+          <div class="options">
+            ${questionData.options.map(option => `
+              <div class="option" onclick="selectSingleOption('${questionData.id}', '${option.id}', ${option.points})">
+                <input type="radio" name="q${questionData.id}" value="${option.id}" ${answers[questionData.id] === option.id ? 'checked' : ''}>
+                <label>${option.text}</label>
+              </div>
+            `).join('')}
+          </div>
+        `;
+      } else if (questionData.type === 'multiple') {
+        return `
+          <div class="options">
+            ${questionData.options.map(option => `
+              <div class="option" onclick="toggleMultipleOption('${questionData.id}', '${option.id}', ${option.points})">
+                <input type="checkbox" name="q${questionData.id}" value="${option.id}" ${answers[questionData.id] && answers[questionData.id].includes(option.id) ? 'checked' : ''}>
+                <label>${option.text}</label>
+              </div>
+            `).join('')}
+          </div>
+        `;
+      } else if (questionData.type === 'input') {
+        return `
+          <div class="options">
+            ${questionData.fields.map(field => `
+              <div class="input-group">
+                <label for="${field.id}">${field.label}:</label>
+                <input type="${field.type}" id="${field.id}" placeholder="${field.placeholder}" 
+                       value="${answers[field.id] || ''}" onchange="saveInputValue('${field.id}', this.value)">
+              </div>
+            `).join('')}
+          </div>
+        `;
+      }
+    }
+
+    function selectSingleOption(questionId, optionId, points) {
+      answers[questionId] = optionId;
+      answers[questionId + '_points'] = points;
+      
+      // Update UI
+      const options = document.querySelectorAll(`input[name="q${questionId}"]`);
+      options.forEach(option => {
+        option.checked = option.value === optionId;
+        option.closest('.option').classList.toggle('selected', option.checked);
+      });
+    }
+
+    function toggleMultipleOption(questionId, optionId, points) {
+      if (!answers[questionId]) {
+        answers[questionId] = [];
+        answers[questionId + '_points'] = [];
+      }
+      
+      const index = answers[questionId].indexOf(optionId);
+      if (index > -1) {
+        answers[questionId].splice(index, 1);
+        answers[questionId + '_points'].splice(index, 1);
+      } else {
+        answers[questionId].push(optionId);
+        answers[questionId + '_points'].push(points);
+      }
+      
+      // Update UI
+      const checkbox = document.querySelector(`input[value="${optionId}"]`);
+      checkbox.checked = answers[questionId].includes(optionId);
+      checkbox.closest('.option').classList.toggle('selected', checkbox.checked);
+    }
+
+    function saveInputValue(fieldId, value) {
+      answers[fieldId] = value;
+    }
+
+    function updateProgress() {
+      const progress = ((currentQuestionIndex + 1) / questions[currentLang].length) * 100;
+      document.getElementById('progressFill').style.width = `${progress}%`;
+    }
+
+    function updateNavigation() {
+      const prevBtn = document.getElementById('prevBtn');
+      const nextBtn = document.getElementById('nextBtn');
+      const t = translations[currentLang];
+      
+      prevBtn.disabled = currentQuestionIndex === 0;
+      
+      if (currentQuestionIndex === questions[currentLang].length - 1) {
+        nextBtn.innerHTML = `<span>${t['btn-finish']}</span>`;
+      } else {
+        nextBtn.innerHTML = `<span>${t['btn-next']}</span>`;
+      }
+    }
+
+    function nextQuestion() {
+      if (currentQuestionIndex < questions[currentLang].length - 1) {
+        currentQuestionIndex++;
+        renderQuestion();
+      } else {
+        showResults();
+      }
+    }
+
+    function previousQuestion() {
+      if (currentQuestionIndex > 0) {
+        currentQuestionIndex--;
+        renderQuestion();
+      }
+    }
+
+    function calculateRisk() {
+      let totalPoints = 0;
+      
+      // Calculate BMI if height and weight are provided
+      if (answers.height && answers.weight) {
+        const height = parseFloat(answers.height) / 100; // convert to meters
+        const weight = parseFloat(answers.weight);
+        const bmi = weight / (height * height);
+        
+        if (bmi > 30) {
+          totalPoints += 2; // Obesity
+        } else if (bmi > 25) {
+          totalPoints += 1; // Overweight
+        }
+      }
+      
+      // Sum up all points from answers
+      Object.keys(answers).forEach(key => {
+        if (key.endsWith('_points')) {
+          const points = answers[key];
+          if (Array.isArray(points)) {
+            totalPoints += points.reduce((sum, p) => sum + p, 0);
+          } else {
+            totalPoints += points || 0;
+          }
+        }
+      });
+      
+      return totalPoints;
+    }
+
+    function getRiskLevel(points) {
+      if (points <= 5) return 'low';
+      if (points <= 12) return 'medium';
+      return 'high';
+    }
+
+    function getRecommendations(riskLevel, lang) {
+      const recommendations = {
+        kz: {
+          low: [
+            "Жылына бір рет профилактикалық тексеруден өтіңіз",
+            "Дұрыс тамақтануды ұстаныңыз",
+            "Тұрақты дене шынықтырумен айналысыңыз",
+            "Зиянды әдеттерден арылыңыз"
+          ],
+          medium: [
+            "Жылына 2 рет дәрігерге барыңыз",
+            "Қосымша тексерулер жасатыңыз",
+            "Стрессті басқаруды үйреніңіз",
+            "Дұрыс демалыс режимін ұстаныңыз",
+            "Мамандармен кеңесіңіз"
+          ],
+          high: [
+            "Дереу дәрігермен кеңесіңіз",
+            "Толық медициналық тексеруден өтіңіз",
+            "Мамандардың нұсқауларын орындаңыз",
+            "Өмір салтын өзгертіңіз",
+            "Тұрақты бақылауда болыңыз"
+          ]
+        },
+        ru: {
+          low: [
+            "Проходите профилактические осмотры раз в год",
+            "Придерживайтесь правильного питания",
+            "Регулярно занимайтесь физической активностью",
+            "Откажитесь от вредных привычек"
+          ],
+          medium: [
+            "Посещайте врача 2 раза в год",
+            "Пройдите дополнительные обследования",
+            "Научитесь управлять стрессом",
+            "Соблюдайте правильный режим отдыха",
+            "Консультируйтесь со специалистами"
+          ],
+          high: [
+            "Немедленно обратитесь к врачу",
+            "Пройдите полное медицинское обследование",
+            "Следуйте рекомендациям специалистов",
+            "Измените образ жизни",
+            "Находитесь под постоянным наблюдением"
+          ]
+        }
+      };
+      
+      return recommendations[lang][riskLevel] || [];
+    }
+
+    function showResults() {
+      const points = calculateRisk();
+      const riskLevel = getRiskLevel(points);
+      const t = translations[currentLang];
+      
+      // Hide question container and navigation
+      document.getElementById('questionContainer').classList.add('hidden');
+      document.querySelector('.navigation').classList.add('hidden');
+      
+      // Show results
+      const resultsDiv = document.getElementById('results');
+      resultsDiv.classList.remove('hidden');
+      
+      // Update risk level display
+      const riskLevelDiv = document.getElementById('riskLevel');
+      riskLevelDiv.textContent = t[`risk-${riskLevel}`];
+      riskLevelDiv.className = `risk-level risk-${riskLevel}`;
+      
+      // Update recommendations
+      const recommendations = getRecommendations(riskLevel, currentLang);
+      const recommendationsList = document.getElementById('recommendationsList');
+      recommendationsList.innerHTML = recommendations.map(rec => `<li>${rec}</li>`).join('');
+      
+      // Update progress to 100%
+      document.getElementById('progressFill').style.width = '100%';
+    }
+
+    async function submitResults() {
+      if (!userTelegramID) {
+        alert('Telegram ID не найден');
+        return;
+      }
+
+      const loadingDiv = document.getElementById('loading');
+      const resultsDiv = document.getElementById('results');
+      const t = translations[currentLang];
+      
+      // Show loading
+      resultsDiv.classList.add('hidden');
+      loadingDiv.classList.remove('hidden');
+      
+      try {
+        const points = calculateRisk();
+        const riskLevel = getRiskLevel(points);
+        
+        const resultData = {
+          user_id: userTelegramID,
+          answers: answers,
+          total_points: points,
+          risk_level: riskLevel,
+          recommendations: getRecommendations(riskLevel, currentLang),
+          timestamp: new Date().toISOString(),
+          language: currentLang
+        };
+
+        const response = await fetch('/api/screening/submit', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(resultData)
+        });
+
+        if (response.ok) {
+          // Show success message
+          if (Telegram.WebApp.showPopup) {
+            Telegram.WebApp.showPopup({
+              title: '✅',
+              message: t['submit-success'],
+              buttons: [{type: 'ok'}]
+            }, () => {
+              // Close the web app or redirect
+              if (Telegram.WebApp.close) {
+                Telegram.WebApp.close();
+              }
+            });
+          } else {
+            alert(t['submit-success']);
+          }
+        } else {
+          throw new Error('Server error');
+        }
+        
+      } catch (error) {
+        console.error('Error submitting results:', error);
+        
+        // Hide loading and show results again
+        loadingDiv.classList.add('hidden');
+        resultsDiv.classList.remove('hidden');
+        
+        if (Telegram.WebApp.showAlert) {
+          Telegram.WebApp.showAlert(t['submit-error']);
+        } else {
+          alert(t['submit-error']);
+        }
+      }
+    }
+
+    // Initialize app
+    function initApp() {
+      updateTexts();
+      renderQuestion();
+    }
+
+    // Handle escape key
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        if (Telegram.WebApp.close) {
+          Telegram.WebApp.close();
+        }
+      }
+    });
+
+    // Adapt to viewport changes
+    Telegram.WebApp.onEvent('viewportChanged', function() {
+      const viewportHeight = Telegram.WebApp.viewportHeight;
+      document.body.style.minHeight = viewportHeight + 'px';
+    });
+
+    // Initialize when DOM is loaded
+    document.addEventListener('DOMContentLoaded', initApp);
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', initApp);
+    } else {
+      initApp();
+    }
+  </script>
+</body>
+</html>

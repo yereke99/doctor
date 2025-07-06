@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"doctor/internal/domain"
 	"fmt"
 	"sync"
 	"sync/atomic"
@@ -13,12 +14,132 @@ import (
 	"golang.org/x/time/rate"
 )
 
+const (
+	stateStart      string = "start"
+	stateCount      string = "count"
+	statePaid       string = "paid"
+	stateContact    string = "contact"
+	stateAdminPanel string = "admin_panel"
+	stateBroadcast  string = "broadcast"
+	stateScreenChat        = "screen_chat"
+)
+
 func (h *Handler) AdminHandler(ctx context.Context, b *bot.Bot, update *models.Update) {
 	if update.Message == nil || update.Message.From.ID != h.cfg.AdminID {
 		return
 	}
 
-	h.logger.Info("admin clicked")
+	adminId := h.cfg.AdminID
+	h.logger.Info("Admin handler", zap.Any("update", update))
+
+	state, err := h.redisRepo.GetUserState(ctx, adminId)
+	if err != nil {
+		h.logger.Error("Failed to get admin state from Redis", zap.Error(err))
+	}
+	if state != nil && state.State == stateBroadcast {
+		h.SendMessage(ctx, b, update)
+		return
+	}
+
+	adminKeyboard := &models.ReplyKeyboardMarkup{
+		Keyboard: [][]models.KeyboardButton{
+			{
+				{Text: "👥 Тіркелгендер (Just Clicked)"},
+				{Text: "🛍 Клиенттер (Clients)"},
+			},
+			{
+				{Text: "📢 Хабарлама (Messages)"},
+				{Text: "❌ Жабу (Close)"},
+			},
+		},
+		ResizeKeyboard:  true,
+		Selective:       true,
+		OneTimeKeyboard: true,
+	}
+
+	switch update.Message.Text {
+	case "/admin":
+		newAdminState := &domain.UserState{
+			State: stateAdminPanel,
+		}
+		if err := h.redisRepo.SaveUserState(ctx, adminId, newAdminState); err != nil {
+			h.logger.Error("Failed to save admin state to Redis", zap.Error(err))
+		}
+		_, err := b.SendMessage(ctx, &bot.SendMessageParams{
+			ChatID:      adminId,
+			Text:        "🔧 Админ панеліне қош келдіңіз!\n\nТаңдаңыз:",
+			ReplyMarkup: adminKeyboard,
+		})
+		if err != nil {
+			h.logger.Error("Failed to send admin panel", zap.Error(err))
+		}
+
+	case "👥 Тіркелгендер (Just Clicked)":
+		h.handleJustUsers(ctx, b)
+
+	case "🛍 Клиенттер (Clients)":
+		h.handleClients(ctx, b)
+
+	case "📢 Хабарлама (Messages)":
+		h.handleBroadcastMenu(ctx, b)
+
+	case "📊 Статистика (Statistics)":
+		h.handleStatistics(ctx, b)
+
+	case "❌ Жабу (Close)":
+		h.handleCloseAdmin(ctx, b)
+	default:
+		if state != nil && state.State == stateAdminPanel {
+			_, err := b.SendMessage(ctx, &bot.SendMessageParams{
+				ChatID:      adminId,
+				Text:        "Белгісіз команда. Төмендегі батырмаларды пайдаланыңыз:",
+				ReplyMarkup: adminKeyboard,
+			})
+			if err != nil {
+				h.logger.Error("Failed to send admin panel", zap.Error(err))
+			}
+		}
+	}
+}
+
+func (h *Handler) handleStatistics(ctx context.Context, b *bot.Bot) {
+	userIds, _ := h.userRepo.GetAllJustUserIDs(ctx)
+
+	message := fmt.Sprintf(`📊 ЖАЛПЫ СТАТИСТИКА
+
+👥 Жалпы пайдаланушылар: %d
+🛍 Клиенттер: 0
+🎲 Лото қатысушылары: 0
+
+📅 Соңғы жаңарту: %s`,
+		len(userIds),
+		time.Now().Format("2006-01-02 15:04:05"))
+
+	_, err := b.SendMessage(ctx, &bot.SendMessageParams{
+		ChatID: h.cfg.AdminID,
+		Text:   message,
+	})
+	if err != nil {
+		h.logger.Error("Failed to send statistics", zap.Error(err))
+	}
+}
+
+func (h *Handler) handleCloseAdmin(ctx context.Context, b *bot.Bot) {
+	if err := h.redisRepo.DeleteUserState(ctx, h.cfg.AdminID); err != nil {
+		h.logger.Error("Failed to delete admin state from Redis", zap.Error(err))
+	}
+
+	// Remove keyboard
+	_, err := b.SendMessage(ctx, &bot.SendMessageParams{
+		ChatID: h.cfg.AdminID,
+		Text:   "✅ Админ панелі жабылды",
+		ReplyMarkup: &models.ReplyKeyboardRemove{
+			RemoveKeyboard: true,
+		},
+	})
+	if err != nil {
+		h.logger.Error("Failed to close admin panel", zap.Error(err))
+	}
 }
 
 func (h *Handler) SendMessage(ctx context.Context, b *bot.Bot, update *models.Update) {
@@ -123,6 +244,33 @@ func (h *Handler) SendMessage(ctx context.Context, b *bot.Bot, update *models.Up
 	})
 }
 
+func (h *Handler) handleJustUsers(ctx context.Context, b *bot.Bot) {
+	userIds, err := h.userRepo.GetAllJustUserIDs(ctx)
+	if err != nil {
+		h.logger.Error("Failed to get just users", zap.Error(err))
+		return
+	}
+
+	message := fmt.Sprintf("👥 ТІРКЕЛГЕН ПАЙДАЛАНУШЫЛАР\n\nЖалпы: %d пайдаланушы", len(userIds))
+	_, err = b.SendMessage(ctx, &bot.SendMessageParams{
+		ChatID: h.cfg.AdminID,
+		Text:   message,
+	})
+	if err != nil {
+		h.logger.Error("Failed to send just users", zap.Error(err))
+	}
+}
+
+func (h *Handler) handleClients(ctx context.Context, b *bot.Bot) {
+	_, err := b.SendMessage(ctx, &bot.SendMessageParams{
+		ChatID: h.cfg.AdminID,
+		Text:   "🛍 КЛИЕНТТЕР\n\n🔧 Дамуда...",
+	})
+	if err != nil {
+		h.logger.Error("Failed to send clients", zap.Error(err))
+	}
+}
+
 func (h *Handler) sendToUserBroadcast(ctx context.Context, b *bot.Bot, update *models.Update, chatId int64, msgType, fileID, caption string) error {
 	switch msgType {
 	case "text":
@@ -192,5 +340,102 @@ func (h *Handler) getBroadcastTypeName(broadcastType string) string {
 		return "Тіркелген пайдаланушылар"
 	default:
 		return "Белгісіз"
+	}
+}
+
+// Helper methods for admin panel
+func (h *Handler) handleBroadcastMenu(ctx context.Context, b *bot.Bot) {
+	adminId := h.cfg.AdminID
+
+	// Get counts for each category
+	allCount, _ := h.userRepo.GetAllJustUserIDs(ctx)
+
+	broadcastState := &domain.UserState{
+		State: stateBroadcast,
+	}
+	if err := h.redisRepo.SaveUserState(ctx, adminId, broadcastState); err != nil {
+		h.logger.Error("Failed to save broadcast state to Redis", zap.Error(err))
+	}
+
+	broadcastKeyboard := &models.ReplyKeyboardMarkup{
+		Keyboard: [][]models.KeyboardButton{
+			{
+				{Text: "📢 Барлығына жіберу"},
+				{Text: "🛍 Клиенттерге жіберу"},
+			},
+			{
+				{Text: "🎲 Лото қатысушыларына "},
+				{Text: "👥 Тіркелгендерге"},
+			},
+			{
+				{Text: "🔙 Артқа (Back)"},
+			},
+		},
+		ResizeKeyboard:  true,
+		OneTimeKeyboard: false,
+	}
+
+	message := fmt.Sprintf(`📢 ХАБАРЛАМА ЖІБЕРУ
+
+📊 Қол жетімді аудитория:
+• 👥 Барлық пайдаланушылар: %d
+• 🛍 Клиенттер: %d  
+• 🎲 Лото қатысушылары: %d
+• 📅 Тіркелгендер: %d
+
+⚠️ Ескерту: Хабарлама барлық таңдалған пайдаланушыларға жіберіледі. Сақ болыңыз!
+
+Қайсы топқа хабарлама жіберуді қалайсыз?`,
+		len(allCount), len(allCount), len(allCount), len(allCount))
+
+	_, err := b.SendMessage(ctx, &bot.SendMessageParams{
+		ChatID:      adminId,
+		Text:        message,
+		ReplyMarkup: broadcastKeyboard,
+	})
+	if err != nil {
+		h.logger.Error("Failed to send broadcast menu", zap.Error(err))
+	}
+}
+
+func (h *Handler) startBroadcast(ctx context.Context, b *bot.Bot, broadcastType string) {
+	adminId := h.cfg.AdminID
+
+	// Set admin to broadcast state
+	broadCastState := &domain.UserState{
+		State:         stateBroadcast,
+		BroadCastType: broadcastType,
+	}
+	if err := h.redisRepo.SaveUserState(ctx, adminId, broadCastState); err != nil {
+		h.logger.Error("Failed to save broadcast state to Redis", zap.Error(err))
+	}
+
+	targetDescription := h.getBroadcastTypeName(broadcastType)
+
+	_, err := b.SendMessage(ctx, &bot.SendMessageParams{
+		ChatID: adminId,
+		Text: fmt.Sprintf(`📝 ХАБАРЛАМА ЖАЗУ
+
+🎯 Мақсатты аудитория: %s
+
+💡 Қолдаулатын форматтар:
+• 📝 Мәтін хабарлама
+• 📷 Фото + мәтін
+• 🎥 Видео + мәтін  
+• 📎 Файл + мәтін
+• 🎵 Аудио
+• 🎬 GIF анимация
+
+Хабарламаңызды жіберіңіз:`, targetDescription),
+		ReplyMarkup: &models.ReplyKeyboardMarkup{
+			Keyboard: [][]models.KeyboardButton{
+				{{Text: "🔙 Артқа (Back)"}},
+			},
+			ResizeKeyboard:  true,
+			OneTimeKeyboard: false,
+		},
+	})
+	if err != nil {
+		h.logger.Error("Failed to start broadcast", zap.Error(err))
 	}
 }

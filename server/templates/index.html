@@ -21,6 +21,8 @@
       --success-gradient: linear-gradient(135deg, #48bb78 0%, #38a169 100%);
       --doctor-gradient: linear-gradient(135deg, #3b82f6 0%, #1e40af 100%);
       --patient-gradient: linear-gradient(135deg, #10b981 0%, #059669 100%);
+      --screening-gradient: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+      --disabled-gradient: linear-gradient(135deg, #9ca3af 0%, #6b7280 100%);
       --input-bg: #f7fafc;
       --input-border: #e2e8f0;
       --input-focus: #667eea;
@@ -48,6 +50,8 @@
       --success-gradient: linear-gradient(135deg, #34d399 0%, #10b981 100%);
       --doctor-gradient: linear-gradient(135deg, #60a5fa 0%, #3b82f6 100%);
       --patient-gradient: linear-gradient(135deg, #34d399 0%, #10b981 100%);
+      --screening-gradient: linear-gradient(135deg, #a78bfa 0%, #8b5cf6 100%);
+      --disabled-gradient: linear-gradient(135deg, #64748b 0%, #475569 100%);
       --input-bg: #1e293b;
       --input-border: #334155;
       --input-focus: #818cf8;
@@ -169,6 +173,36 @@
       background: var(--accent-gradient);
       color: white;
       border-color: transparent;
+    }
+
+    .info-button {
+      position: fixed;
+      top: 20px;
+      left: 20px;
+      background: var(--card-bg);
+      color: var(--accent-primary);
+      border: 1px solid var(--card-border);
+      border-radius: 50%;
+      width: 40px;
+      height: 40px;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 1.2rem;
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      transition: all 0.3s ease;
+      box-shadow: var(--shadow-sm);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+    }
+
+    .info-button:hover {
+      transform: scale(1.1);
+      box-shadow: var(--shadow-md);
+      background: var(--accent-primary);
+      color: white;
     }
 
     .container {
@@ -348,27 +382,57 @@
       transform: translateY(-1px);
     }
 
+    .screening-btn {
+      background: var(--screening-gradient);
+      box-shadow: 0 6px 20px rgba(139, 92, 246, 0.3);
+    }
+
+    .screening-btn:hover {
+      box-shadow: 0 8px 25px rgba(139, 92, 246, 0.4);
+    }
+
     .doctor-btn {
-      background: var(--doctor-gradient);
-      box-shadow: 0 6px 20px rgba(59, 130, 246, 0.3);
+      background: var(--disabled-gradient);
+      cursor: not-allowed;
+      box-shadow: 0 6px 20px rgba(156, 163, 175, 0.3);
+      opacity: 0.7;
     }
 
     .doctor-btn:hover {
-      box-shadow: 0 8px 25px rgba(59, 130, 246, 0.4);
+      transform: none;
+      box-shadow: 0 6px 20px rgba(156, 163, 175, 0.3);
+    }
+
+    .doctor-btn::before {
+      display: none;
     }
 
     .patient-btn {
-      background: var(--patient-gradient);
-      box-shadow: 0 6px 20px rgba(16, 185, 129, 0.3);
+      background: var(--disabled-gradient);
+      cursor: not-allowed;
+      box-shadow: 0 6px 20px rgba(156, 163, 175, 0.3);
+      opacity: 0.7;
     }
 
     .patient-btn:hover {
-      box-shadow: 0 8px 25px rgba(16, 185, 129, 0.4);
+      transform: none;
+      box-shadow: 0 6px 20px rgba(156, 163, 175, 0.3);
+    }
+
+    .patient-btn::before {
+      display: none;
     }
 
     .btn-icon {
       font-size: 1.5rem;
       filter: drop-shadow(0 2px 4px rgba(0,0,0,0.2));
+    }
+
+    .coming-soon {
+      font-size: 0.9rem;
+      color: var(--text-muted);
+      margin-top: 4px;
+      font-style: italic;
     }
 
     .loading {
@@ -393,6 +457,121 @@
       to { transform: rotate(360deg); }
     }
 
+    /* Info Modal styles */
+    .info-modal {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: var(--modal-bg);
+      z-index: 2000;
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+    }
+
+    .info-modal.active {
+      display: flex;
+      align-items: flex-start;
+      justify-content: flex-start;
+      padding: 20px;
+      animation: modalFadeIn 0.3s ease-out;
+    }
+
+    @keyframes modalFadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+
+    .info-modal-content {
+      background: var(--card-bg);
+      border-radius: 16px;
+      padding: 24px;
+      max-width: 400px;
+      width: 100%;
+      max-height: 70vh;
+      overflow-y: auto;
+      box-shadow: var(--shadow-xl);
+      position: relative;
+      animation: infoModalSlideIn 0.3s ease-out;
+      margin-left: 60px;
+      margin-top: 20px;
+    }
+
+    @keyframes infoModalSlideIn {
+      from {
+        opacity: 0;
+        transform: translateX(-20px) scale(0.95);
+      }
+      to {
+        opacity: 1;
+        transform: translateX(0) scale(1);
+      }
+    }
+
+    .info-modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid var(--input-border);
+    }
+
+    .info-modal-title {
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: var(--accent-primary);
+    }
+
+    .info-close-btn {
+      background: none;
+      border: none;
+      font-size: 1.5rem;
+      cursor: pointer;
+      color: var(--text-muted);
+      padding: 4px;
+      border-radius: 50%;
+      transition: all 0.3s ease;
+      width: 32px;
+      height: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .info-close-btn:hover {
+      background: var(--input-bg);
+      color: var(--text-primary);
+    }
+
+    .info-modal-body {
+      color: var(--text-secondary);
+      line-height: 1.6;
+      font-size: 0.95rem;
+    }
+
+    .info-modal-body h3 {
+      color: var(--accent-primary);
+      margin-bottom: 8px;
+      margin-top: 16px;
+      font-size: 1rem;
+    }
+
+    .info-modal-body h3:first-child {
+      margin-top: 0;
+    }
+
+    .info-modal-body ul {
+      margin: 8px 0;
+      padding-left: 20px;
+    }
+
+    .info-modal-body li {
+      margin-bottom: 4px;
+    }
+
     /* Modal styles */
     .modal {
       display: none;
@@ -412,11 +591,6 @@
       align-items: center;
       justify-content: center;
       animation: modalFadeIn 0.3s ease-out;
-    }
-
-    @keyframes modalFadeIn {
-      from { opacity: 0; }
-      to { opacity: 1; }
     }
 
     .modal-content {
@@ -597,6 +771,14 @@
         font-size: 0.8rem;
       }
 
+      .info-button {
+        top: 12px;
+        left: 12px;
+        width: 36px;
+        height: 36px;
+        font-size: 1rem;
+      }
+
       .container {
         padding: 24px 20px;
         border-radius: 20px;
@@ -623,6 +805,12 @@
         padding: 18px 20px;
         font-size: 1rem;
         min-height: 60px;
+      }
+
+      .info-modal-content {
+        max-width: calc(100vw - 40px);
+        margin-left: 0;
+        margin-top: 60px;
       }
 
       .modal-content {
@@ -670,6 +858,8 @@
   <div class="decoration decoration-2"></div>
   <div class="decoration decoration-3"></div>
 
+  <button class="info-button" onclick="showInfoModal()">?</button>
+
   <div class="lang-switch">
     <button onclick="setLang('kz')" id="lang-kz" class="active">ҚАЗ</button>
     <button onclick="setLang('ru')" id="lang-ru">РУС</button>
@@ -692,15 +882,48 @@
       </p>
       
       <div class="buttons-container">
-        <button class="main-btn doctor-btn" onclick="chooseDoctor()">
-          <span class="btn-icon">👩‍⚕️</span>
-          <span id="btn-doctor">Дәрігер болу</span>
+        <button class="main-btn screening-btn" onclick="openScreening()">
+          <span class="btn-icon">🔍</span>
+          <span id="btn-screening">Скрининг өту</span>
         </button>
         
-        <button class="main-btn patient-btn" onclick="choosePatient()">
-          <span class="btn-icon">🏥</span>
-          <span id="btn-patient">Дәрігер керек</span>
+        <button class="main-btn doctor-btn" onclick="showComingSoon('doctor')">
+          <span class="btn-icon">👩‍⚕️</span>
+          <div>
+            <div id="btn-doctor">Дәрігер болу</div>
+            <div class="coming-soon" id="coming-soon-doctor">Жақын арада...</div>
+          </div>
         </button>
+        
+        <button class="main-btn patient-btn" onclick="showComingSoon('patient')">
+          <span class="btn-icon">🏥</span>
+          <div>
+            <div id="btn-patient">Дәрігер керек</div>
+            <div class="coming-soon" id="coming-soon-patient">Жақын арада...</div>
+          </div>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Info Modal -->
+  <div id="info-modal" class="info-modal">
+    <div class="info-modal-content">
+      <div class="info-modal-header">
+        <h3 class="info-modal-title" id="info-modal-title">Скрининг туралы</h3>
+        <button class="info-close-btn" onclick="closeInfoModal()">&times;</button>
+      </div>
+      
+      <div class="info-modal-body" id="info-modal-body">
+        <h3>Скрининг дегеніміз не?</h3>
+        <p>Скрининг - бұл ауру белгілері пайда болғанға дейін денсаулық жағдайын тексеру әдісі. Ол ауруларды ерте кезеңде анықтауға көмектеседі.</p>
+        
+        <h3>Скрининг мақсаттары:</h3>
+        <ul>
+          <li>Ауруларды ерте анықтау</li>
+          <li>Қауіп факторларын бағалау</li>
+          <li>Алдын алу шараларын жоспарлау</li>
+          <li>Денсаулық жағдайын бақылау</li>
       </div>
     </div>
   </div>
@@ -738,27 +961,81 @@
         loading: 'Жүктелуде...',
         'welcome-title': 'MedHub-қа қош келдіңіз!',
         'welcome-subtitle': 'Сапалы медициналық қызметтерге жылдам қол жеткізу',
+        'btn-screening': 'Скрининг өту',
         'btn-doctor': 'Дәрігер болу',
         'btn-patient': 'Дәрігер керек',
+        'coming-soon-doctor': 'Жақын арада...',
+        'coming-soon-patient': 'Жақын арада...',
+        'info-modal-title': 'Скрининг туралы',
         'modal-title-doctor': 'Дәрігер келісім шарттары',
         'modal-title-patient': 'Пайдаланушы келісім шарттары',
         'btn-decline': 'Келіспеймін',
         'btn-accept': 'Келісемін',
         'error-user-check': 'Пайдаланушыны тексеру кезінде қате орын алды',
-        'error-agreement': 'Келісім шарттарын жүктеу кезінде қате орын алды'
+        'error-agreement': 'Келісім шарттарын жүктеу кезінде қате орын алды',
+        'coming-soon-message': 'Бұл функция жақын арада қосылады!',
+        'info-screening-title': 'Скрининг дегеніміз не?',
+        'info-screening-desc': 'Скрининг - бұл ауру белгілері пайда болғанға дейін денсаулық жағдайын тексеру әдісі. Ол ауруларды ерте кезеңде анықтауға көмектеседі.',
+        'info-screening-goals': 'Скрининг мақсаттары:',
+        'info-screening-who': 'Кімге қажет?',
+        screeningInfo: {
+          whatIs: 'Скрининг дегеніміз не?',
+          description: 'Скрининг - бұл ауру белгілері пайда болғанға дейін денсаулық жағдайын тексеру әдісі. Ол ауруларды ерте кезеңде анықтауға көмектеседі.',
+          goals: 'Скрининг мақсаттары:',
+          goalsList: [
+            'Ауруларды ерте анықтау',
+            'Қауіп факторларын бағалау',
+            'Алдын алу шараларын жоспарлау',
+            'Денсаулық жағдайын бақылау'
+          ],
+          whoNeeds: 'Кімге қажет?',
+          whoNeedsList: [
+            '30 жастан асқан адамдарға',
+            'Тұқым қуалайтын ауруы бар адамдарға',
+            'Қауіп тобындағы адамдарға',
+            'Созылмалы ауруы бар адамдарға'
+          ]
+        }
       },
       ru: {
         loading: 'Загрузка...',
         'welcome-title': 'Добро пожаловать в MedHub!',
         'welcome-subtitle': 'Быстрый доступ к качественным медицинским услугам',
+        'btn-screening': 'Пройти скрининг',
         'btn-doctor': 'Стать врачом',
         'btn-patient': 'Нужен врач',
+        'coming-soon-doctor': 'Скоро...',
+        'coming-soon-patient': 'Скоро...',
+        'info-modal-title': 'О скрининге',
         'modal-title-doctor': 'Соглашение для врача',
         'modal-title-patient': 'Пользовательское соглашение',
         'btn-decline': 'Не согласен',
         'btn-accept': 'Согласен',
         'error-user-check': 'Ошибка при проверке пользователя',
-        'error-agreement': 'Ошибка загрузки соглашения'
+        'error-agreement': 'Ошибка загрузки соглашения',
+        'coming-soon-message': 'Эта функция скоро будет доступна!',
+        'info-screening-title': 'Что такое скрининг?',
+        'info-screening-desc': 'Скрининг - это метод проверки состояния здоровья до появления симптомов болезни. Он помогает выявлять заболевания на ранних стадиях.',
+        'info-screening-goals': 'Цели скрининга:',
+        'info-screening-who': 'Кому необходим?',
+        screeningInfo: {
+          whatIs: 'Что такое скрининг?',
+          description: 'Скрининг - это метод проверки состояния здоровья до появления симптомов болезни. Он помогает выявлять заболевания на ранних стадиях.',
+          goals: 'Цели скрининга:',
+          goalsList: [
+            'Раннее выявление заболеваний',
+            'Оценка факторов риска',
+            'Планирование профилактических мер',
+            'Контроль состояния здоровья'
+          ],
+          whoNeeds: 'Кому необходим?',
+          whoNeedsList: [
+            'Людям старше 30 лет',
+            'Людям с наследственными заболеваниями',
+            'Людям из групп риска',
+            'Людям с хроническими заболеваниями'
+          ]
+        }
       }
     };
 
@@ -825,6 +1102,7 @@
       document.getElementById('lang-' + lang).classList.add('active');
       
       updateTexts();
+      updateInfoModal();
     }
 
     function updateTexts() {
@@ -839,12 +1117,44 @@
       });
     }
 
+    function updateInfoModal() {
+      const t = translations[currentLang];
+      const info = t.screeningInfo;
+      
+      document.getElementById('info-modal-title').textContent = info.whatIs;
+      
+      const body = document.getElementById('info-modal-body');
+      body.innerHTML = `
+        <h3>${info.whatIs}</h3>
+        <p>${info.description}</p>
+        
+        <h3>${info.goals}</h3>
+        <ul>
+          ${info.goalsList.map(goal => `<li>${goal}</li>`).join('')}
+        </ul>
+        
+        <h3>${info.whoNeeds}</h3>
+        <ul>
+          ${info.whoNeedsList.map(who => `<li>${who}</li>`).join('')}
+        </ul>
+      `;
+    }
+
     // Show/hide pages
     function showPage(pageId) {
       document.querySelectorAll('.page').forEach(page => {
         page.classList.remove('active');
       });
       document.getElementById(pageId).classList.add('active');
+    }
+
+    // Info modal functions
+    function showInfoModal() {
+      document.getElementById('info-modal').classList.add('active');
+    }
+
+    function closeInfoModal() {
+      document.getElementById('info-modal').classList.remove('active');
     }
 
     // Modal functions
@@ -911,6 +1221,38 @@
       errorEl.textContent = message;
       errorEl.style.display = 'block';
       console.error('Error:', message);
+    }
+
+    // Open screening page
+    function openScreening() {
+      // Create the screening URL
+      const screeningUrl = './static/screening.html';
+      
+      // Check if running in Telegram WebApp
+      if (Telegram.WebApp.platform !== 'unknown') {
+        // Open in Telegram WebApp
+        Telegram.WebApp.openLink(screeningUrl);
+      } else {
+        // Open in new window for desktop/browser
+        window.open(screeningUrl, '_blank');
+      }
+    }
+
+    // Show coming soon message
+    function showComingSoon(type) {
+      const t = translations[currentLang];
+      
+      // Show native Telegram popup if available
+      if (Telegram.WebApp.showPopup) {
+        Telegram.WebApp.showPopup({
+          title: type === 'doctor' ? t['btn-doctor'] : t['btn-patient'],
+          message: t['coming-soon-message'],
+          buttons: [{type: 'ok'}]
+        });
+      } else {
+        // Fallback to browser alert
+        alert(t['coming-soon-message']);
+      }
     }
 
     // Choose doctor path
@@ -1035,6 +1377,7 @@
     // Initialize app
     function initApp() {
       updateTexts();
+      updateInfoModal();
       checkUserStatus();
     }
 
@@ -1049,8 +1392,15 @@
 
     // Add click effects to buttons
     document.addEventListener('click', (e) => {
-      if (e.target.classList.contains('main-btn')) {
+      if (e.target.classList.contains('main-btn') && !e.target.classList.contains('doctor-btn') && !e.target.classList.contains('patient-btn')) {
         animateContainer();
+      }
+    });
+
+    // Close info modal on outside click
+    document.getElementById('info-modal').addEventListener('click', (e) => {
+      if (e.target.id === 'info-modal') {
+        closeInfoModal();
       }
     });
 
@@ -1064,6 +1414,7 @@
     // Handle escape key
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') {
+        closeInfoModal();
         closeModal();
       }
     });

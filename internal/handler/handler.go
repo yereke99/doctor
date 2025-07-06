@@ -1,31 +1,25 @@
-// Updated handler.go to work with your existing repository structure
-
 package handler
 
 import (
 	"context"
 	"doctor/config"
+	"doctor/internal/domain"
 	"doctor/internal/repository"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/go-telegram/bot"
 	"github.com/go-telegram/bot/models"
 	"github.com/go-telegram/ui/slider"
 	"go.uber.org/zap"
-	"golang.org/x/sync/errgroup"
-	"golang.org/x/time/rate"
 )
 
 type Handler struct {
@@ -36,6 +30,19 @@ type Handler struct {
 	reverseSpecialtyMapping map[string]string
 	logger                  *zap.Logger
 	cfg                     *config.Config
+	adminScreenChats        map[int64]int64 // adminID -> userID mapping for screening chats
+	screenChatMutex         sync.RWMutex
+}
+
+// ScreeningResult represents the screening test result
+type ScreeningResult struct {
+	UserID          int64                  `json:"user_id"`
+	Answers         map[string]interface{} `json:"answers"`
+	TotalPoints     int                    `json:"total_points"`
+	RiskLevel       string                 `json:"risk_level"`
+	Recommendations []string               `json:"recommendations"`
+	Timestamp       string                 `json:"timestamp"`
+	Language        string                 `json:"language"`
 }
 
 // NewHandler инициализирует Handler с репозиториями
@@ -74,54 +81,239 @@ func NewHandler(
 			"LAB_TEST":     "Анализ",
 			"IV_DRIP":      "Капельница к медперсоналу",
 		},
-		logger: logger,
-		cfg:    cfg,
+		logger:           logger,
+		cfg:              cfg,
+		adminScreenChats: make(map[int64]int64),
 	}
 }
 
-func (h *Handler) SendHandler(ctx context.Context, b *bot.Bot, update *models.Update) {
-	msg := update.Message
-	if msg == nil || msg.From.ID != h.cfg.AdminID {
+// Handle screening chat between admin and user
+func (h *Handler) handleScreenChat(ctx context.Context, b *bot.Bot, update *models.Update) {
+	adminID := update.Message.From.ID
+
+	h.screenChatMutex.RLock()
+	userID, exists := h.adminScreenChats[adminID]
+	h.screenChatMutex.RUnlock()
+
+	if !exists {
+		_, err := b.SendMessage(ctx, &bot.SendMessageParams{
+			ChatID: adminID,
+			Text:   "❌ Активті чат табылмады.",
+		})
+		if err != nil {
+			h.logger.Error("error sending no active chat message", zap.Error(err))
+		}
 		return
 	}
 
-	// Определяем тип сообщения и получаем fileID/caption
-	msgType, fileID, caption := h.parseMessage(msg)
-
-	// Загружаем всех пользователей
-	userIDs, err := []int64{}, errors.New("new error test")
-	if err != nil {
-		h.logger.Error("failed to load user IDs", zap.Error(err))
+	// Handle exit command
+	if update.Message.Text == "/exit" || strings.Contains(update.Message.Text, "exit_chat") {
+		h.exitScreenChat(ctx, b, adminID)
 		return
 	}
 
-	rateLimiter := rate.NewLimiter(rate.Every(time.Second/30), 1)
-	var successCount, failCount int64
-	errGroup, ctx := errgroup.WithContext(ctx)
+	// Forward admin's message to user with protection
+	var err error
 
-	for _, userID := range userIDs {
-		errGroup.Go(func() error {
-			if err := rateLimiter.Wait(ctx); err != nil {
-				return err
-			}
-			if err := h.sendToUser(ctx, b, userID, msgType, fileID, caption); err != nil {
-				atomic.AddInt64(&failCount, 1)
-				h.logger.Error("send failed", zap.Error(err), zap.Int64("chatID", userID))
-			} else {
-				atomic.AddInt64(&successCount, 1)
-			}
-			return nil
+	switch {
+	case update.Message.Text != "":
+		_, err = b.SendMessage(ctx, &bot.SendMessageParams{
+			ChatID:         userID,
+			Text:           update.Message.Text,
+			ProtectContent: true,
+			ParseMode:      models.ParseModeMarkdown,
+		})
+
+	case len(update.Message.Photo) > 0:
+		caption := update.Message.Caption
+		_, err = b.SendPhoto(ctx, &bot.SendPhotoParams{
+			ChatID:         userID,
+			Photo:          &models.InputFileString{Data: update.Message.Photo[len(update.Message.Photo)-1].FileID},
+			Caption:        caption,
+			ProtectContent: true,
+		})
+
+	case update.Message.Video != nil:
+		caption := update.Message.Caption
+		_, err = b.SendVideo(ctx, &bot.SendVideoParams{
+			ChatID:         userID,
+			Video:          &models.InputFileString{Data: update.Message.Video.FileID},
+			Caption:        caption,
+			ProtectContent: true,
+		})
+
+	case update.Message.VideoNote != nil:
+		_, err = b.SendVideoNote(ctx, &bot.SendVideoNoteParams{
+			ChatID:         userID,
+			VideoNote:      &models.InputFileString{Data: update.Message.VideoNote.FileID},
+			ProtectContent: true,
+		})
+
+	case update.Message.Voice != nil:
+		_, err = b.SendVoice(ctx, &bot.SendVoiceParams{
+			ChatID:         userID,
+			Voice:          &models.InputFileString{Data: update.Message.Voice.FileID},
+			ProtectContent: true,
+		})
+
+	case update.Message.Audio != nil:
+		caption := update.Message.Caption
+		_, err = b.SendAudio(ctx, &bot.SendAudioParams{
+			ChatID:         userID,
+			Audio:          &models.InputFileString{Data: update.Message.Audio.FileID},
+			Caption:        caption,
+			ProtectContent: true,
+		})
+
+	case update.Message.Document != nil:
+		caption := update.Message.Caption
+		_, err = b.SendDocument(ctx, &bot.SendDocumentParams{
+			ChatID:         userID,
+			Document:       &models.InputFileString{Data: update.Message.Document.FileID},
+			Caption:        caption,
+			ProtectContent: true,
 		})
 	}
-	// Итоговый отчёт для админа
-	summary := fmt.Sprintf(
-		"📣 Рассылка завершена:\n✅ Успешно: %d\n❌ Ошибок: %d",
-		atomic.LoadInt64(&successCount),
-		atomic.LoadInt64(&failCount),
-	)
-	_, _ = b.SendMessage(ctx, &bot.SendMessageParams{
-		ChatID: h.cfg.AdminID,
-		Text:   summary,
+
+	if err != nil {
+		h.logger.Error("error forwarding message to user", zap.Error(err))
+		_, _ = b.SendMessage(ctx, &bot.SendMessageParams{
+			ChatID: adminID,
+			Text:   "❌ Хабарламаны жіберу кезінде қате орын алды.",
+		})
+	} else {
+		// Send confirmation to admin with exit button
+		markup := &models.InlineKeyboardMarkup{
+			InlineKeyboard: [][]models.InlineKeyboardButton{{
+				{Text: "🚪 Чатты аяқтау", CallbackData: "exit_chat"},
+			}},
+		}
+
+		_, _ = b.SendMessage(ctx, &bot.SendMessageParams{
+			ChatID:      adminID,
+			Text:        "✅ Хабарлама жіберілді",
+			ReplyMarkup: markup,
+		})
+	}
+}
+
+// Exit screening chat
+func (h *Handler) exitScreenChat(ctx context.Context, b *bot.Bot, adminID int64) {
+	h.screenChatMutex.Lock()
+	userID, exists := h.adminScreenChats[adminID]
+	if exists {
+		delete(h.adminScreenChats, adminID)
+	}
+	h.screenChatMutex.Unlock()
+
+	if exists {
+		// Save state to Redis for persistence
+		h.redisRepo.DeleteUserState(ctx, userID) // Clean up user state
+
+		// Notify admin
+		userState := h.getOrCreateUserState(ctx, adminID)
+		userState.State = stateAdminPanel
+		h.redisRepo.SaveUserState(ctx, adminID, userState)
+
+		_, err := b.SendMessage(ctx, &bot.SendMessageParams{
+			ChatID: adminID,
+			Text:   "🚪 Чат аяқталды. Админ панеліне оралдыңыз.",
+		})
+		if err != nil {
+			h.logger.Error("error sending chat exit message", zap.Error(err))
+		}
+
+		// Notify user
+		_, err = b.SendMessage(ctx, &bot.SendMessageParams{
+			ChatID: userID,
+			Text:   "🏥 Дәрігермен кеңесу аяқталды. Қосымша сұрақтарыңыз болса, қайта хабарласыңыз.",
+		})
+		if err != nil {
+			h.logger.Error("error sending chat exit message to user", zap.Error(err))
+		}
+	}
+}
+
+func (h *Handler) InlineScreenAnswer(ctx context.Context, b *bot.Bot, update *models.Update) {
+	if update.CallbackQuery == nil {
+		return
+	}
+
+	callback := update.CallbackQuery
+	if callback.Data == "exit_chat" {
+		h.exitScreenChat(ctx, b, callback.From.ID)
+		b.AnswerCallbackQuery(ctx, &bot.AnswerCallbackQueryParams{
+			CallbackQueryID: callback.ID,
+			Text:            "Чат аяқталды",
+		})
+		return
+	}
+
+	parts := strings.Split(callback.Data, "_")
+	if len(parts) != 2 || parts[0] != "screen" {
+		b.AnswerCallbackQuery(ctx, &bot.AnswerCallbackQueryParams{
+			CallbackQueryID: callback.ID,
+			Text:            "Қате деректер",
+		})
+		return
+	}
+
+	userId, err := strconv.ParseInt(parts[1], 10, 64)
+	if err != nil {
+		b.AnswerCallbackQuery(ctx, &bot.AnswerCallbackQueryParams{
+			CallbackQueryID: callback.ID,
+			Text:            "Қате пайдаланушы ID",
+		})
+		return
+	}
+
+	adminId := callback.From.ID
+
+	h.screenChatMutex.RLock()
+	existingUserID, hasActiveChat := h.adminScreenChats[adminId]
+	if hasActiveChat {
+		b.AnswerCallbackQuery(ctx, &bot.AnswerCallbackQueryParams{
+			CallbackQueryID: callback.ID,
+			Text:            fmt.Sprintf("Сізде %d пайдаланушысымен белсенді чат бар", existingUserID),
+		})
+		return
+	}
+	h.screenChatMutex.RUnlock()
+
+	h.screenChatMutex.Lock()
+	h.adminScreenChats[adminId] = userId
+	h.screenChatMutex.Unlock()
+
+	adminState := h.getOrCreateUserState(ctx, adminId)
+	adminState.State = stateScreenChat
+	h.redisRepo.SaveUserState(ctx, adminId, adminState)
+	// Notify admin
+	markup := &models.InlineKeyboardMarkup{
+		InlineKeyboard: [][]models.InlineKeyboardButton{{
+			{Text: "🚪 Чатты аяқтау", CallbackData: "exit_chat"},
+		}},
+	}
+
+	_, err = b.SendMessage(ctx, &bot.SendMessageParams{
+		ChatID:      adminId,
+		Text:        fmt.Sprintf("💬 %d пайдаланушысымен чат басталды.\n\nХабарлама жіберіңіз:", userId),
+		ReplyMarkup: markup,
+	})
+	if err != nil {
+		h.logger.Error("error starting screening chat", zap.Error(err))
+	}
+	// Notify user
+	_, err = b.SendMessage(ctx, &bot.SendMessageParams{
+		ChatID: userId,
+		Text:   "👨‍⚕️ Дәрігер сізбен байланысқа шықты. Скрининг нәтижелері бойынша кеңес беріледі.",
+	})
+	if err != nil {
+		h.logger.Error("error notifying user about chat start", zap.Error(err))
+	}
+
+	b.AnswerCallbackQuery(ctx, &bot.AnswerCallbackQueryParams{
+		CallbackQueryID: callback.ID,
+		Text:            "Чат басталды",
 	})
 }
 
@@ -179,11 +371,66 @@ func (h *Handler) sendToUser(
 	}
 }
 
+// graceful degradation for Redis failures
+func (h *Handler) getOrCreateUserState(ctx context.Context, userID int64) *domain.UserState {
+	state, err := h.redisRepo.GetUserState(ctx, userID)
+	if err != nil {
+		h.logger.Error("Redis error, using fallback state",
+			zap.Error(err),
+			zap.Int64("user_id", userID))
+
+		// Return a safe default state
+		return &domain.UserState{
+			State:  stateStart,
+			Count:  0,
+			IsPaid: false,
+		}
+	}
+
+	if state == nil {
+		state = &domain.UserState{
+			State:  stateStart,
+			Count:  0,
+			IsPaid: false,
+		}
+
+		// Try to save, but don't fail if Redis is down
+		if err := h.redisRepo.SaveUserState(ctx, userID, state); err != nil {
+			h.logger.Warn("Failed to save state to Redis, continuing with in-memory state",
+				zap.Error(err))
+		}
+	}
+
+	return state
+}
+
 // DefaultHandler отвечает на любые текстовые сообщения.
 func (h *Handler) DefaultHandler(ctx context.Context, b *bot.Bot, update *models.Update) {
 	if update.Message == nil {
 		return
 	}
+
+	userID := update.Message.From.ID
+	if userID == h.cfg.AdminID {
+		var fileId string
+		switch {
+		case len(update.Message.Photo) > 0:
+			fileId = update.Message.Photo[len(update.Message.Photo)-1].FileID
+		case update.Message.Video != nil:
+			fileId = update.Message.Video.FileID
+		}
+		if fileId != "" {
+			_, err := b.SendMessage(ctx, &bot.SendMessageParams{
+				ChatID: h.cfg.AdminID,
+				Text:   fileId,
+			})
+			if err != nil {
+				h.logger.Error("error send fileId to admin", zap.Error(err))
+			}
+		}
+	}
+
+	userState := h.getOrCreateUserState(ctx, userID)
 
 	// Инлайн-кнопка с эмодзи и ссылкой
 	markup := &models.InlineKeyboardMarkup{
@@ -193,6 +440,18 @@ func (h *Handler) DefaultHandler(ctx context.Context, b *bot.Bot, update *models
 				URL:  "https://t.me/dariger_test_bot/mediHub",
 			},
 		}},
+	}
+
+	switch userState.State {
+	case stateAdminPanel:
+		h.AdminHandler(ctx, b, update)
+		return
+	case stateBroadcast:
+		h.SendMessage(ctx, b, update)
+		return
+	case stateScreenChat:
+		h.handleScreenChat(ctx, b, update)
+		return
 	}
 
 	// Текст с эмодзи
@@ -248,6 +507,118 @@ func (h *Handler) InlineHandlerWrapper(ctx context.Context, b *bot.Bot, update *
 		return
 	}
 	h.InlineHandler(ctx, b, update.CallbackQuery)
+}
+
+// SubmitScreeningHandler handles POST requests to submit screening results
+func (h *Handler) SubmitScreeningHandler(w http.ResponseWriter, r *http.Request, ctx context.Context, b *bot.Bot) {
+	// CORS headers
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+	w.Header().Set("Content-Type", "application/json")
+
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Parse JSON body
+	var result ScreeningResult
+	if err := json.NewDecoder(r.Body).Decode(&result); err != nil {
+		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		return
+	}
+
+	// Validate required fields
+	if result.UserID == 0 || result.RiskLevel == "" {
+		http.Error(w, "Missing required fields", http.StatusBadRequest)
+		return
+	}
+
+	// Send immediate response
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"message": "Screening results received",
+	})
+
+	// Process in background
+	go func() {
+		// Save results to database (implement as needed)
+		h.logger.Info("Screening results received",
+			zap.Int64("user_id", result.UserID),
+			zap.String("risk_level", result.RiskLevel),
+			zap.Int("total_points", result.TotalPoints))
+		h.sendScreeningResultsToAdmin(ctx, b, &result)
+	}()
+}
+
+// Send screening results to admin with inline button to start chat
+func (h *Handler) sendScreeningResultsToAdmin(ctx context.Context, b *bot.Bot, result *ScreeningResult) {
+	// Format risk level in appropriate language
+	riskLevelText := map[string]string{
+		"low":    "🟢 Төмен қауіп / Низкий риск",
+		"medium": "🟡 Орташа қауіп / Средний риск",
+		"high":   "🔴 Жоғары қауіп / Высокий риск",
+	}[result.RiskLevel]
+
+	if riskLevelText == "" {
+		riskLevelText = result.RiskLevel
+	}
+
+	// Format message
+	msgText := fmt.Sprintf(
+		"📋 Жаңа скрининг нәтижесі / Новый результат скрининга\n\n"+
+			"👤 Пайдаланушы ID / ID пользователя: %d\n"+
+			"🔍 Жалпы ұпай / Общий балл: %d\n"+
+			"⚡ Қауіп деңгейі / Уровень риска: %s\n"+
+			"🕒 Уақыт / Время: %s\n"+
+			"🌐 Тіл / Язык: %s",
+		result.UserID,
+		result.TotalPoints,
+		riskLevelText,
+		result.Timestamp,
+		result.Language,
+	)
+
+	// Add recommendations if available
+	if len(result.Recommendations) > 0 {
+		msgText += "\n\n📝 Ұсыныстар / Рекомендации:\n"
+		for i, rec := range result.Recommendations {
+			if i < 3 { // Show only first 3 recommendations
+				msgText += fmt.Sprintf("• %s\n", rec)
+			}
+		}
+		if len(result.Recommendations) > 3 {
+			msgText += fmt.Sprintf("... және тағы %d / и еще %d", len(result.Recommendations)-3, len(result.Recommendations)-3)
+		}
+	}
+
+	// Create inline keyboard with chat button
+	markup := &models.InlineKeyboardMarkup{
+		InlineKeyboard: [][]models.InlineKeyboardButton{{
+			{
+				Text:         "💬 Пайдаланушымен сөйлесу / Связаться с пользователем",
+				CallbackData: fmt.Sprintf("screen_%d", result.UserID),
+			},
+		}},
+	}
+
+	// Send to admin
+	_, err := b.SendMessage(ctx, &bot.SendMessageParams{
+		ChatID:      h.cfg.AdminID,
+		Text:        msgText,
+		ReplyMarkup: markup,
+		ParseMode:   models.ParseModeMarkdown,
+	})
+	if err != nil {
+		h.logger.Error("error sending screening results to admin", zap.Error(err))
+	}
 }
 
 // DoctorHandler handles doctor registration
@@ -414,7 +785,7 @@ func (h *Handler) DoctorHandler(w http.ResponseWriter, r *http.Request, ctx cont
 			}
 		}
 		opts := []slider.Option{slider.OnSelect("✅ Қабылдау", true, onSelect)}
-		for _, admin := range []int64{800703982} {
+		for _, admin := range []int64{h.cfg.AdminID} {
 			sl := slider.New(b, slides, opts...)
 			sl.Show(ctx, b, admin)
 		}
@@ -928,10 +1299,6 @@ func (h *Handler) PatientAppointmentHandler(w http.ResponseWriter, r *http.Reque
 		}
 
 		if exists {
-			if err := h.userRepo.UpdateClient(clientReg); err != nil {
-				h.logger.Error("Error updating client", zap.Error(err))
-			}
-		} else {
 			if err := h.userRepo.InsertClient(clientReg); err != nil {
 				h.logger.Error("Error inserting client", zap.Error(err))
 			}
@@ -978,7 +1345,7 @@ func (h *Handler) PatientAppointmentHandler(w http.ResponseWriter, r *http.Reque
 		if photoPath != "" {
 			f, err = os.Open(photoPath)
 			if err != nil {
-				h.logger.Warn("Ошибка открытия файла", zap.Error(err))
+				h.logger.Warn("Ошибка открытия файла", zap.String("path", photoPath), zap.Error(err))
 			} else {
 				defer f.Close()
 			}
@@ -1093,29 +1460,11 @@ func (h *Handler) DeleteMessageHandler(ctx context.Context, b *bot.Bot, update *
 		return
 	}
 
-	// удаляем собственное приглашение
-	/*
-		if mq := update.CallbackQuery.Message; mq.Message != nil {
-				b.DeleteMessage(ctx, &bot.DeleteMessageParams{
-					ChatID:    mq.Message.Chat.ID,
-					MessageID: mq.Message.ID,
-				})
-			}
-	*/
-
 	// убираем spinner
 	b.AnswerCallbackQuery(ctx, &bot.AnswerCallbackQueryParams{
 		CallbackQueryID: update.CallbackQuery.ID,
 		Text:            "Қабылдадым!",
 	})
-
-	// уведомляем врача
-	/*
-		b.SendMessage(ctx, &bot.SendMessageParams{
-				ChatID: update.CallbackQuery.From.ID,
-				Text:   "Хабарлама сәтті жойылды!",
-			})
-	*/
 
 	// уведомляем пациента
 	b.SendMessage(ctx, &bot.SendMessageParams{
@@ -1128,7 +1477,10 @@ func (h *Handler) DeleteMessageHandler(ctx context.Context, b *bot.Bot, update *
 		h.logger.Error("Ошибка получения данных доктора", zap.Error(err))
 	} else {
 		var f *os.File
-		photoPath := *doc.AvatarPath
+		photoPath := ""
+		if doc.AvatarPath != nil {
+			photoPath = *doc.AvatarPath
+		}
 		caption := fmt.Sprintf("Ваш врач: %s\nКонтакт: %s", *doc.FullName, *doc.Contact)
 		if photoPath != "" {
 			f, err = os.Open(photoPath)
@@ -1136,18 +1488,26 @@ func (h *Handler) DeleteMessageHandler(ctx context.Context, b *bot.Bot, update *
 				h.logger.Error("error in open doctor ava", zap.Error(err))
 			}
 		}
-		if _, err := b.SendPhoto(ctx, &bot.SendPhotoParams{
-			ChatID: userID,
-			Photo: &models.InputFileUpload{
-				Filename: photoPath,
-				Data:     f,
-			}, // путь к файлу ./ava/…
-			Caption: caption,
-		}); err != nil {
-			h.logger.Error("Ошибка отправки фото доктора пациенту",
-				zap.Error(err),
-				zap.String("photoPath", photoPath),
-			)
+		if f != nil {
+			if _, err := b.SendPhoto(ctx, &bot.SendPhotoParams{
+				ChatID: userID,
+				Photo: &models.InputFileUpload{
+					Filename: photoPath,
+					Data:     f,
+				}, // путь к файлу ./ava/…
+				Caption: caption,
+			}); err != nil {
+				h.logger.Error("Ошибка отправки фото доктора пациенту",
+					zap.Error(err),
+					zap.String("photoPath", photoPath),
+				)
+			}
+		} else {
+			// Send message without photo if file opening failed
+			b.SendMessage(ctx, &bot.SendMessageParams{
+				ChatID: userID,
+				Text:   caption,
+			})
 		}
 	}
 }
@@ -1184,6 +1544,18 @@ func (h *Handler) StartWebServer(botToken string, ctx context.Context, b *bot.Bo
 		h.SaveUserAgreementHandler(w, r)
 	})
 
+	// Screening submit endpoint
+	http.HandleFunc("/api/screening/submit", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodOptions {
+			w.Header().Set("Access-Control-Allow-Origin", "*")
+			w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		h.SubmitScreeningHandler(w, r, ctx, b)
+	})
+
 	// Doctor routes
 	http.HandleFunc("/doctor", func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
@@ -1218,88 +1590,76 @@ func (h *Handler) StartWebServer(botToken string, ctx context.Context, b *bot.Bo
 	// Serve PDF files from offerta directory
 	http.Handle("/offerta/", http.StripPrefix("/offerta/", http.FileServer(http.Dir("./offerta/"))))
 
-	// Welcome  page route
-	http.HandleFunc("/welcome", func(w http.ResponseWriter, r *http.Request) {
-		templatePath := "./server/templates/index.html"
+	// Serve screening page
+	http.HandleFunc("/static/screening.html", func(w http.ResponseWriter, r *http.Request) {
+		templatePath := "./static/screening.html"
 		if _, err := os.Stat(templatePath); os.IsNotExist(err) {
-			h.logger.Error("Debug file not found", zap.String("path", templatePath))
-			http.Error(w, "Debug page not found", http.StatusNotFound)
+			h.logger.Error("Screening template not found", zap.String("path", templatePath))
+			http.Error(w, "Screening page not found", http.StatusNotFound)
 			return
 		}
 		http.ServeFile(w, r, templatePath)
 	})
 
-	// Mini app routes
-	http.HandleFunc("/update-doctor", func(w http.ResponseWriter, r *http.Request) {
-		templatePath := "./server/templates/update-doctor.html"
+	// Welcome page route
+	http.HandleFunc("/welcome/", func(w http.ResponseWriter, r *http.Request) {
+		// Extract user ID from URL path
+		pathParts := strings.Split(r.URL.Path, "/")
+		if len(pathParts) < 3 {
+			http.Error(w, "Invalid user ID", http.StatusBadRequest)
+			return
+		}
+
+		userIDStr := pathParts[2]
+		userTelegramID, err := strconv.ParseInt(userIDStr, 10, 64)
+		if err != nil {
+			http.Error(w, "Invalid user ID format", http.StatusBadRequest)
+			return
+		}
+
+		// Get user status
+		status, err := h.userRepo.GetUserStatus(userTelegramID, h.repo)
+		if err != nil {
+			h.logger.Error("Error getting user status for welcome page", zap.Error(err))
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			return
+		}
+
+		// Serve appropriate welcome page based on user type
+		var templatePath string
+		if status.IsDoctor {
+			templatePath = "./static/welcome-doctor.html"
+		} else {
+			templatePath = "./static/welcome-patient.html"
+		}
+
 		if _, err := os.Stat(templatePath); os.IsNotExist(err) {
-			h.logger.Error("Template file not found", zap.String("path", templatePath))
-			http.Error(w, "Template not found", http.StatusNotFound)
+			h.logger.Error("Welcome template not found", zap.String("path", templatePath))
+			http.Error(w, "Welcome page not found", http.StatusNotFound)
 			return
 		}
 		http.ServeFile(w, r, templatePath)
 	})
 
-	http.HandleFunc("/client", func(w http.ResponseWriter, r *http.Request) {
-		templatePath := "./server/templates/client.html"
-		if _, err := os.Stat(templatePath); os.IsNotExist(err) {
-			h.logger.Error("Template file not found", zap.String("path", templatePath))
-			http.Error(w, "Template not found", http.StatusNotFound)
-			return
-		}
-		http.ServeFile(w, r, templatePath)
+	// Health check endpoint
+	http.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(map[string]string{
+			"status":  "OK",
+			"service": "MedHub API",
+			"time":    time.Now().Format(time.RFC3339),
+		})
 	})
 
-	http.HandleFunc("/doctors", func(w http.ResponseWriter, r *http.Request) {
-		templatePath := "./server/templates/doctor.html"
-		if _, err := os.Stat(templatePath); os.IsNotExist(err) {
-			h.logger.Error("Template file not found", zap.String("path", templatePath))
-			http.Error(w, "Template not found", http.StatusNotFound)
-			return
-		}
-		http.ServeFile(w, r, templatePath)
-	})
-
-	// Debug test page route
-	http.HandleFunc("/debug", func(w http.ResponseWriter, r *http.Request) {
-		debugPath := "./debug.html"
-		if _, err := os.Stat(debugPath); os.IsNotExist(err) {
-			h.logger.Error("Debug file not found", zap.String("path", debugPath))
-			http.Error(w, "Debug page not found", http.StatusNotFound)
-			return
-		}
-		http.ServeFile(w, r, debugPath)
-	})
-
-	// Main index route - serve the new index.html
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/" {
-			http.NotFound(w, r)
-			return
-		}
-
-		// Serve the main index.html file
-		indexPath := "./index.html"
-		if _, err := os.Stat(indexPath); os.IsNotExist(err) {
-			h.logger.Error("Index file not found", zap.String("path", indexPath))
-			http.Error(w, "Index not found", http.StatusNotFound)
-			return
-		}
-		http.ServeFile(w, r, indexPath)
-	})
-
-	addr := ":8080"
-	h.logger.Info("веб-сервер запущен", zap.String("addr", addr))
-	log.Fatal(http.ListenAndServe(addr, nil))
-}
-
-// Close closes all repository connections
-func (h *Handler) Close() error {
-	if h.userRepo != nil {
-		if err := h.userRepo.Close(); err != nil {
-			h.logger.Error("Error closing user repository", zap.Error(err))
-			return err
-		}
+	// Start server
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
 	}
-	return nil
+
+	h.logger.Info("Starting web server", zap.String("port", port))
+	if err := http.ListenAndServe(":"+port, nil); err != nil {
+		h.logger.Fatal("Failed to start web server", zap.Error(err))
+	}
 }

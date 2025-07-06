@@ -133,14 +133,21 @@ func main() {
 	// Initialize handler with all repositories
 	// Note: You'll need to update your NewHandler function to accept userRepo parameter
 	// or use a temporary compatibility approach
-	h := handler.NewHandler(doctorRepo, userRepo, redisRepo, zapLogger, cfg)
-
+	handl := handler.NewHandler(doctorRepo, userRepo, redisRepo, zapLogger, cfg)
 	// Configure bot options
 	opts := []bot.Option{
-		bot.WithDefaultHandler(h.DefaultHandler),
-		bot.WithCallbackQueryDataHandler("doctor_", bot.MatchTypePrefix, h.InlineHandlerWrapper),
-		bot.WithCallbackQueryDataHandler("confirm_", bot.MatchTypePrefix, h.InlineHandlerWrapper),
-		bot.WithCallbackQueryDataHandler("delete_", bot.MatchTypePrefix, h.DeleteMessageHandler),
+		bot.WithDefaultHandler(handl.DefaultHandler),
+		bot.WithCallbackQueryDataHandler("doctor_", bot.MatchTypePrefix, handl.InlineHandlerWrapper),
+		bot.WithCallbackQueryDataHandler("confirm_", bot.MatchTypePrefix, handl.InlineHandlerWrapper),
+		bot.WithCallbackQueryDataHandler("delete_", bot.MatchTypePrefix, handl.DeleteMessageHandler),
+		bot.WithCallbackQueryDataHandler("screen_", bot.MatchTypePrefix, handl.InlineScreenAnswer),  // NEW
+		bot.WithCallbackQueryDataHandler("exit_chat", bot.MatchTypeExact, handl.InlineScreenAnswer), // NEW
+		bot.WithMessageTextHandler("/admin", bot.MatchTypeExact, handl.AdminHandler),
+		bot.WithMessageTextHandler("👥 Тіркелгендер (Just Clicked)", bot.MatchTypeExact, handl.AdminHandler),
+		bot.WithMessageTextHandler("🛍 Клиенттер (Clients)", bot.MatchTypeExact, handl.AdminHandler),
+		bot.WithMessageTextHandler("📢 Хабарлама (Messages)", bot.MatchTypeExact, handl.AdminHandler),
+		bot.WithMessageTextHandler("📊 Статистика (Statistics)", bot.MatchTypeExact, handl.AdminHandler),
+		bot.WithMessageTextHandler("❌ Жабу (Close)", bot.MatchTypeExact, handl.AdminHandler),
 	}
 
 	// Create bot instance
@@ -153,7 +160,7 @@ func main() {
 	// Start web server in a separate goroutine
 	go func() {
 		zapLogger.Info("starting web server on :8080")
-		h.StartWebServer(token, ctx, b)
+		handl.StartWebServer(token, ctx, b)
 	}()
 
 	// Start the bot
@@ -162,7 +169,4 @@ func main() {
 
 	// Cleanup
 	zapLogger.Info("shutting down...")
-	if err := h.Close(); err != nil {
-		zapLogger.Error("error during cleanup", zap.Error(err))
-	}
 }

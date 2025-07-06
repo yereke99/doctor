@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"strings"
@@ -243,6 +244,26 @@ func (r *UserRepository) GetClientByUserID(userID int64) (*ClientRegistration, e
 }
 
 // === USER AGREEMENT OPERATIONS ===
+
+// GetAllJustUserIDs returns all user IDs from just table
+func (r *UserRepository) GetAllJustUserIDs(ctx context.Context) ([]int64, error) {
+	const q = `SELECT id_user FROM just ORDER BY created_at DESC;`
+	rows, err := r.db.QueryContext(ctx, q)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var userIDs []int64
+	for rows.Next() {
+		var userID int64
+		if err := rows.Scan(&userID); err != nil {
+			continue
+		}
+		userIDs = append(userIDs, userID)
+	}
+	return userIDs, nil
+}
 
 // SaveUserAgreement сохраняет согласие пользователя
 func (r *UserRepository) SaveUserAgreement(telegramID int64, userType string, agreed bool) error {
