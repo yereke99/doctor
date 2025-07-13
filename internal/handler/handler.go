@@ -6,6 +6,7 @@ import (
 	"doctor/internal/domain"
 	"doctor/internal/repository"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -14,12 +15,15 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/go-telegram/bot"
 	"github.com/go-telegram/bot/models"
 	"github.com/go-telegram/ui/slider"
 	"go.uber.org/zap"
+	"golang.org/x/sync/errgroup"
+	"golang.org/x/time/rate"
 )
 
 type Handler struct {
@@ -34,15 +38,14 @@ type Handler struct {
 	screenChatMutex         sync.RWMutex
 }
 
-// ScreeningResult represents the screening test result
+// ScreeningResult struct to match the frontend data
 type ScreeningResult struct {
-	UserID          int64                  `json:"user_id"`
-	Answers         map[string]interface{} `json:"answers"`
-	TotalPoints     int                    `json:"total_points"`
-	RiskLevel       string                 `json:"risk_level"`
-	Recommendations []string               `json:"recommendations"`
-	Timestamp       string                 `json:"timestamp"`
-	Language        string                 `json:"language"`
+	UserID           int64                  `json:"user_id"`
+	Timestamp        string                 `json:"timestamp"`
+	Language         string                 `json:"language"`
+	BMI              *float64               `json:"bmi,omitempty"`
+	Answers          map[string]interface{} `json:"answers"`
+	FormattedMessage string                 `json:"formatted_message"` // Pre-formatted message from frontend
 }
 
 // NewHandler инициализирует Handler с репозиториями
@@ -234,12 +237,15 @@ func (h *Handler) exitScreenChat(ctx context.Context, b *bot.Bot, adminID int64)
 	}
 }
 
+// Handle screening inline button responses
 func (h *Handler) InlineScreenAnswer(ctx context.Context, b *bot.Bot, update *models.Update) {
 	if update.CallbackQuery == nil {
 		return
 	}
 
 	callback := update.CallbackQuery
+
+	// Handle exit_chat callback
 	if callback.Data == "exit_chat" {
 		h.exitScreenChat(ctx, b, callback.From.ID)
 		b.AnswerCallbackQuery(ctx, &bot.AnswerCallbackQueryParams{
@@ -249,6 +255,7 @@ func (h *Handler) InlineScreenAnswer(ctx context.Context, b *bot.Bot, update *mo
 		return
 	}
 
+	// Parse screen_userId callback
 	parts := strings.Split(callback.Data, "_")
 	if len(parts) != 2 || parts[0] != "screen" {
 		b.AnswerCallbackQuery(ctx, &bot.AnswerCallbackQueryParams{
@@ -258,7 +265,7 @@ func (h *Handler) InlineScreenAnswer(ctx context.Context, b *bot.Bot, update *mo
 		return
 	}
 
-	userId, err := strconv.ParseInt(parts[1], 10, 64)
+	userID, err := strconv.ParseInt(parts[1], 10, 64)
 	if err != nil {
 		b.AnswerCallbackQuery(ctx, &bot.AnswerCallbackQueryParams{
 			CallbackQueryID: callback.ID,
@@ -267,10 +274,13 @@ func (h *Handler) InlineScreenAnswer(ctx context.Context, b *bot.Bot, update *mo
 		return
 	}
 
-	adminId := callback.From.ID
+	adminID := callback.From.ID
 
+	// Check if admin already has an active chat
 	h.screenChatMutex.RLock()
-	existingUserID, hasActiveChat := h.adminScreenChats[adminId]
+	existingUserID, hasActiveChat := h.adminScreenChats[adminID]
+	h.screenChatMutex.RUnlock()
+
 	if hasActiveChat {
 		b.AnswerCallbackQuery(ctx, &bot.AnswerCallbackQueryParams{
 			CallbackQueryID: callback.ID,
@@ -278,15 +288,17 @@ func (h *Handler) InlineScreenAnswer(ctx context.Context, b *bot.Bot, update *mo
 		})
 		return
 	}
-	h.screenChatMutex.RUnlock()
 
+	// Start new screening chat
 	h.screenChatMutex.Lock()
-	h.adminScreenChats[adminId] = userId
+	h.adminScreenChats[adminID] = userID
 	h.screenChatMutex.Unlock()
 
-	adminState := h.getOrCreateUserState(ctx, adminId)
+	// Save state to Redis
+	adminState := h.getOrCreateUserState(ctx, adminID)
 	adminState.State = stateScreenChat
-	h.redisRepo.SaveUserState(ctx, adminId, adminState)
+	h.redisRepo.SaveUserState(ctx, adminID, adminState)
+
 	// Notify admin
 	markup := &models.InlineKeyboardMarkup{
 		InlineKeyboard: [][]models.InlineKeyboardButton{{
@@ -295,16 +307,17 @@ func (h *Handler) InlineScreenAnswer(ctx context.Context, b *bot.Bot, update *mo
 	}
 
 	_, err = b.SendMessage(ctx, &bot.SendMessageParams{
-		ChatID:      adminId,
-		Text:        fmt.Sprintf("💬 %d пайдаланушысымен чат басталды.\n\nХабарлама жіберіңіз:", userId),
+		ChatID:      adminID,
+		Text:        fmt.Sprintf("💬 %d пайдаланушысымен чат басталды.\n\nХабарлама жіберіңіз:", userID),
 		ReplyMarkup: markup,
 	})
 	if err != nil {
 		h.logger.Error("error starting screening chat", zap.Error(err))
 	}
+
 	// Notify user
 	_, err = b.SendMessage(ctx, &bot.SendMessageParams{
-		ChatID: userId,
+		ChatID: userID,
 		Text:   "👨‍⚕️ Дәрігер сізбен байланысқа шықты. Скрининг нәтижелері бойынша кеңес беріледі.",
 	})
 	if err != nil {
@@ -314,6 +327,53 @@ func (h *Handler) InlineScreenAnswer(ctx context.Context, b *bot.Bot, update *mo
 	b.AnswerCallbackQuery(ctx, &bot.AnswerCallbackQueryParams{
 		CallbackQueryID: callback.ID,
 		Text:            "Чат басталды",
+	})
+}
+
+func (h *Handler) SendHandler(ctx context.Context, b *bot.Bot, update *models.Update) {
+	msg := update.Message
+	if msg == nil || msg.From.ID != h.cfg.AdminID {
+		return
+	}
+
+	// Определяем тип сообщения и получаем fileID/caption
+	msgType, fileID, caption := h.parseMessage(msg)
+
+	// Загружаем всех пользователей
+	userIDs, err := []int64{}, errors.New("nil")
+	if err != nil {
+		h.logger.Error("failed to load user IDs", zap.Error(err))
+		return
+	}
+
+	rateLimiter := rate.NewLimiter(rate.Every(time.Second/30), 1)
+	var successCount, failCount int64
+	errGroup, ctx := errgroup.WithContext(ctx)
+
+	for _, userID := range userIDs {
+		errGroup.Go(func() error {
+			if err := rateLimiter.Wait(ctx); err != nil {
+				return err
+			}
+			if err := h.sendToUser(ctx, b, userID, msgType, fileID, caption); err != nil {
+				atomic.AddInt64(&failCount, 1)
+				h.logger.Error("send failed", zap.Error(err), zap.Int64("chatID", userID))
+			} else {
+				atomic.AddInt64(&successCount, 1)
+			}
+			return nil
+		})
+	}
+
+	// Итоговый отчёт для админа
+	summary := fmt.Sprintf(
+		"📣 Рассылка завершена:\n✅ Успешно: %d\n❌ Ошибок: %d",
+		atomic.LoadInt64(&successCount),
+		atomic.LoadInt64(&failCount),
+	)
+	_, _ = b.SendMessage(ctx, &bot.SendMessageParams{
+		ChatID: h.cfg.AdminID,
+		Text:   summary,
 	})
 }
 
@@ -530,76 +590,78 @@ func (h *Handler) SubmitScreeningHandler(w http.ResponseWriter, r *http.Request,
 	// Parse JSON body
 	var result ScreeningResult
 	if err := json.NewDecoder(r.Body).Decode(&result); err != nil {
+		h.logger.Error("Failed to decode screening request", zap.Error(err))
 		http.Error(w, "Invalid JSON", http.StatusBadRequest)
 		return
 	}
 
 	// Validate required fields
-	if result.UserID == 0 || result.RiskLevel == "" {
-		http.Error(w, "Missing required fields", http.StatusBadRequest)
+	if result.UserID == 0 {
+		http.Error(w, "Missing user ID", http.StatusBadRequest)
 		return
 	}
 
-	// Send immediate response
+	// Send immediate response to frontend
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"success": true,
-		"message": "Screening results received",
+		"message": "Screening data received successfully",
+		"user_id": result.UserID,
 	})
 
 	// Process in background
 	go func() {
-		// Save results to database (implement as needed)
-		h.logger.Info("Screening results received",
+		h.logger.Info("Processing screening data",
 			zap.Int64("user_id", result.UserID),
-			zap.String("risk_level", result.RiskLevel),
-			zap.Int("total_points", result.TotalPoints))
-		h.sendScreeningResultsToAdmin(ctx, b, &result)
+			zap.String("language", result.Language))
+
+		// Send the pre-formatted message to admin
+		h.sendFormattedScreeningToAdmin(ctx, b, &result)
 	}()
 }
 
-// Send screening results to admin with inline button to start chat
-func (h *Handler) sendScreeningResultsToAdmin(ctx context.Context, b *bot.Bot, result *ScreeningResult) {
-	// Format risk level in appropriate language
-	riskLevelText := map[string]string{
-		"low":    "🟢 Төмен қауіп / Низкий риск",
-		"medium": "🟡 Орташа қауіп / Средний риск",
-		"high":   "🔴 Жоғары қауіп / Высокий риск",
-	}[result.RiskLevel]
+// Send the pre-formatted screening message to admin (no parsing needed!)
+func (h *Handler) sendFormattedScreeningToAdmin(ctx context.Context, b *bot.Bot, result *ScreeningResult) {
+	// Use the pre-formatted message from frontend
+	msgText := result.FormattedMessage
 
-	if riskLevelText == "" {
-		riskLevelText = result.RiskLevel
+	// If no formatted message provided, create a basic one
+	if msgText == "" {
+		h.logger.Warn("No formatted message provided, creating basic message",
+			zap.Int64("user_id", result.UserID))
+
+		// Create basic fallback message
+		timestamp := result.Timestamp
+		if parsedTime, err := time.Parse(time.RFC3339, result.Timestamp); err == nil {
+			timestamp = parsedTime.Format("2006-01-02 15:04:05")
+		}
+
+		langText := map[string]string{
+			"kz": "🇰🇿 Қазақша",
+			"ru": "🇷🇺 Русский",
+		}[result.Language]
+		if langText == "" {
+			langText = result.Language
+		}
+
+		msgText = fmt.Sprintf(
+			"📋 ЖАҢА СКРИНИНГ ДЕРЕКТЕРІ / НОВЫЕ ДАННЫЕ СКРИНИНГА\n\n"+
+				"👤 Пайдаланушы ID / ID пользователя: %d\n"+
+				"🕒 Уақыт / Время: %s\n"+
+				"🌐 Тіл / Язык: %s\n\n"+
+				"⚠️ Форматталған хабарлама жоқ / Нет форматированного сообщения\n\n"+
+				"👨‍⚕️ ДӘРІГЕРДІҢ ҚОРЫТЫНДЫСЫ КҮТІЛУДЕ / ОЖИДАЕТСЯ ЗАКЛЮЧЕНИЕ ВРАЧА",
+			result.UserID,
+			timestamp,
+			langText,
+		)
 	}
 
-	// Format message
-	msgText := fmt.Sprintf(
-		"📋 Жаңа скрининг нәтижесі / Новый результат скрининга\n\n"+
-			"👤 Пайдаланушы ID / ID пользователя: %d\n"+
-			"🔍 Жалпы ұпай / Общий балл: %d\n"+
-			"⚡ Қауіп деңгейі / Уровень риска: %s\n"+
-			"🕒 Уақыт / Время: %s\n"+
-			"🌐 Тіл / Язык: %s",
-		result.UserID,
-		result.TotalPoints,
-		riskLevelText,
-		result.Timestamp,
-		result.Language,
-	)
+	// Split message if too long (Telegram limit is 4096 characters)
+	const maxLength = 4000
+	messages := h.splitLongMessage(msgText, maxLength)
 
-	// Add recommendations if available
-	if len(result.Recommendations) > 0 {
-		msgText += "\n\n📝 Ұсыныстар / Рекомендации:\n"
-		for i, rec := range result.Recommendations {
-			if i < 3 { // Show only first 3 recommendations
-				msgText += fmt.Sprintf("• %s\n", rec)
-			}
-		}
-		if len(result.Recommendations) > 3 {
-			msgText += fmt.Sprintf("... және тағы %d / и еще %d", len(result.Recommendations)-3, len(result.Recommendations)-3)
-		}
-	}
-
-	// Create inline keyboard with chat button
+	// Create inline keyboard with contact button (only for last message)
 	markup := &models.InlineKeyboardMarkup{
 		InlineKeyboard: [][]models.InlineKeyboardButton{{
 			{
@@ -609,15 +671,156 @@ func (h *Handler) sendScreeningResultsToAdmin(ctx context.Context, b *bot.Bot, r
 		}},
 	}
 
-	// Send to admin
-	_, err := b.SendMessage(ctx, &bot.SendMessageParams{
-		ChatID:      h.cfg.AdminID,
-		Text:        msgText,
-		ReplyMarkup: markup,
-		ParseMode:   models.ParseModeMarkdown,
+	// Send all message parts
+	for i, msg := range messages {
+		var sendMarkup *models.InlineKeyboardMarkup
+		if i == len(messages)-1 { // Only add buttons to last message
+			sendMarkup = markup
+		}
+
+		_, err := b.SendMessage(ctx, &bot.SendMessageParams{
+			ChatID:      h.cfg.AdminID,
+			Text:        msg,
+			ReplyMarkup: sendMarkup,
+		})
+
+		if err != nil {
+			h.logger.Error("Failed to send screening message to admin",
+				zap.Error(err),
+				zap.Int64("user_id", result.UserID),
+				zap.Int("message_part", i+1))
+		} else if i == len(messages)-1 {
+			h.logger.Info("Screening data sent to admin successfully",
+				zap.Int64("user_id", result.UserID),
+				zap.Int("total_parts", len(messages)))
+		}
+
+		// Small delay between messages to avoid rate limiting
+		if i < len(messages)-1 {
+			time.Sleep(100 * time.Millisecond)
+		}
+	}
+}
+
+// Helper function to split long messages while preserving formatting
+func (h *Handler) splitLongMessage(text string, maxLength int) []string {
+	if len(text) <= maxLength {
+		return []string{text}
+	}
+
+	var messages []string
+	lines := strings.Split(text, "\n")
+	currentMsg := ""
+
+	for _, line := range lines {
+		// Check if adding this line would exceed the limit
+		testMsg := currentMsg
+		if currentMsg != "" {
+			testMsg += "\n"
+		}
+		testMsg += line
+
+		if len(testMsg) <= maxLength {
+			currentMsg = testMsg
+		} else {
+			// Current message is full, start a new one
+			if currentMsg != "" {
+				messages = append(messages, strings.TrimSpace(currentMsg))
+			}
+
+			// If single line is too long, truncate it
+			if len(line) > maxLength {
+				line = line[:maxLength-3] + "..."
+			}
+			currentMsg = line
+		}
+	}
+
+	// Add the last message if there's content
+	if currentMsg != "" {
+		messages = append(messages, strings.TrimSpace(currentMsg))
+	}
+
+	return messages
+}
+
+// Handler for the screen callback (when admin clicks contact user button)
+func (h *Handler) HandleScreenCallback(ctx context.Context, b *bot.Bot, update *models.Update) {
+	callback := update.CallbackQuery
+	if callback == nil {
+		return
+	}
+
+	// Extract user ID from callback data (format: "screen_123456")
+	parts := strings.Split(callback.Data, "_")
+	if len(parts) != 2 || parts[0] != "screen" {
+		return
+	}
+
+	userID, err := strconv.ParseInt(parts[1], 10, 64)
+	if err != nil {
+		h.logger.Error("Invalid user ID in callback", zap.String("callback_data", callback.Data))
+		return
+	}
+
+	// Answer the callback query
+	_, err = b.AnswerCallbackQuery(ctx, &bot.AnswerCallbackQueryParams{
+		CallbackQueryID: callback.ID,
+		Text:            "Пайдаланушымен байланысу / Связаться с пользователем",
 	})
 	if err != nil {
-		h.logger.Error("error sending screening results to admin", zap.Error(err))
+		h.logger.Error("Failed to answer callback query", zap.Error(err))
+	}
+
+	// Create message to contact the user
+	contactMsg := fmt.Sprintf(
+		"👨‍⚕️ ДӘРІГЕРДЕН ХАБАРЛАМА / СООБЩЕНИЕ ОТ ВРАЧА\n\n" +
+			"Сәлеметсіз бе! Сіздің скрининг тестіңіздің нәтижелері бойынша дәрігер сізбен хабарласқысы келеді.\n\n" +
+			"Здравствуйте! По результатам вашего скрининг теста врач хочет связаться с вами.\n\n" +
+			"📞 Байланыс үшін: / Для связи:\n" +
+			"• Телефон: +7 (XXX) XXX-XX-XX\n" +
+			"• Мекен-жай: / Адрес: [CLINIC_ADDRESS]\n\n" +
+			"⏰ Жұмыс уақыты / Время работы: 08:00-20:00",
+	)
+
+	// Send message to user
+	_, err = b.SendMessage(ctx, &bot.SendMessageParams{
+		ChatID: userID,
+		Text:   contactMsg,
+	})
+
+	if err != nil {
+		h.logger.Error("Failed to send contact message to user",
+			zap.Error(err),
+			zap.Int64("user_id", userID))
+
+		// Notify admin about the error
+		errorMsg := fmt.Sprintf(
+			"❌ Пайдаланушыға хабарлама жіберу мүмкін болмады / Не удалось отправить сообщение пользователю\n"+
+				"👤 User ID: %d\n"+
+				"🔗 Қолмен хабарласыңыз / Свяжитесь вручную",
+			userID,
+		)
+
+		b.SendMessage(ctx, &bot.SendMessageParams{
+			ChatID: h.cfg.AdminID,
+			Text:   errorMsg,
+		})
+	} else {
+		h.logger.Info("Contact message sent to user",
+			zap.Int64("user_id", userID))
+
+		// Confirm to admin
+		confirmMsg := fmt.Sprintf(
+			"✅ Пайдаланушыға хабарлама жіберілді / Сообщение отправлено пользователю\n"+
+				"👤 User ID: %d",
+			userID,
+		)
+
+		b.SendMessage(ctx, &bot.SendMessageParams{
+			ChatID: h.cfg.AdminID,
+			Text:   confirmMsg,
+		})
 	}
 }
 
@@ -1590,56 +1793,91 @@ func (h *Handler) StartWebServer(botToken string, ctx context.Context, b *bot.Bo
 	// Serve PDF files from offerta directory
 	http.Handle("/offerta/", http.StripPrefix("/offerta/", http.FileServer(http.Dir("./offerta/"))))
 
-	// Serve screening page
-	http.HandleFunc("/static/screening.html", func(w http.ResponseWriter, r *http.Request) {
-		templatePath := "./static/screening.html"
+	// Screening route - serves the screening page inside Mini App
+	http.HandleFunc("/screening", func(w http.ResponseWriter, r *http.Request) {
+		templatePath := "./server/templates/screening.html"
+
+		// Check if the screening template exists
 		if _, err := os.Stat(templatePath); os.IsNotExist(err) {
 			h.logger.Error("Screening template not found", zap.String("path", templatePath))
 			http.Error(w, "Screening page not found", http.StatusNotFound)
 			return
 		}
+
+		// Set proper headers for HTML content
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+
+		// Serve the screening HTML file
 		http.ServeFile(w, r, templatePath)
 	})
 
-	// Welcome page route
-	http.HandleFunc("/welcome/", func(w http.ResponseWriter, r *http.Request) {
-		// Extract user ID from URL path
-		pathParts := strings.Split(r.URL.Path, "/")
-		if len(pathParts) < 3 {
-			http.Error(w, "Invalid user ID", http.StatusBadRequest)
-			return
-		}
-
-		userIDStr := pathParts[2]
-		userTelegramID, err := strconv.ParseInt(userIDStr, 10, 64)
-		if err != nil {
-			http.Error(w, "Invalid user ID format", http.StatusBadRequest)
-			return
-		}
-
-		// Get user status
-		status, err := h.userRepo.GetUserStatus(userTelegramID, h.repo)
-		if err != nil {
-			h.logger.Error("Error getting user status for welcome page", zap.Error(err))
-			http.Error(w, "Internal server error", http.StatusInternalServerError)
-			return
-		}
-
-		// Serve appropriate welcome page based on user type
-		var templatePath string
-		if status.IsDoctor {
-			templatePath = "./static/welcome-doctor.html"
-		} else {
-			templatePath = "./static/welcome-patient.html"
-		}
+	// Alternative static file serving if you prefer to keep it in static folder
+	http.HandleFunc("/static/screening.html", func(w http.ResponseWriter, r *http.Request) {
+		templatePath := "./static/screening.html"
 
 		if _, err := os.Stat(templatePath); os.IsNotExist(err) {
-			h.logger.Error("Welcome template not found", zap.String("path", templatePath))
-			http.Error(w, "Welcome page not found", http.StatusNotFound)
+			h.logger.Error("Screening template not found", zap.String("path", templatePath))
+			http.Error(w, "Screening page not found", http.StatusNotFound)
+			return
+		}
+
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		http.ServeFile(w, r, templatePath)
+	})
+	http.HandleFunc("/welcome", func(w http.ResponseWriter, r *http.Request) {
+		templatePath := "./server/templates/welcome.html"
+		if _, err := os.Stat(templatePath); os.IsNotExist(err) {
+			http.Redirect(w, r, "/welcome", http.StatusFound)
 			return
 		}
 		http.ServeFile(w, r, templatePath)
 	})
+	/*
+		// Welcome page route with user ID
+			http.HandleFunc("/welcome/", func(w http.ResponseWriter, r *http.Request) {
+				// Extract user ID from URL path
+				pathParts := strings.Split(r.URL.Path, "/")
+				if len(pathParts) < 3 || pathParts[2] == "" {
+					// If no user ID provided, redirect to main welcome page
+					http.Redirect(w, r, "/welcome", http.StatusFound)
+					return
+				}
+
+				userIDStr := pathParts[2]
+				userTelegramID, err := strconv.ParseInt(userIDStr, 10, 64)
+				if err != nil {
+					h.logger.Error("Invalid user ID format", zap.String("userID", userIDStr), zap.Error(err))
+					http.Redirect(w, r, "/welcome", http.StatusFound)
+					return
+				}
+
+				// Get user status
+				status, err := h.userRepo.GetUserStatus(userTelegramID, h.repo)
+				if err != nil {
+					h.logger.Error("Error getting user status for welcome page", zap.Error(err))
+					http.Redirect(w, r, "/welcome", http.StatusFound)
+					return
+				}
+				fmt.Println(userIDStr)
+				fmt.Println(status)
+
+				// Serve appropriate welcome page based on user type
+				var templatePath string
+				if status.IsDoctor {
+					templatePath = "./static/update-doctor.html"
+				} else {
+					templatePath = "./static/welcome.html"
+				}
+
+				if _, err := os.Stat(templatePath); os.IsNotExist(err) {
+					h.logger.Error("Welcome template not found", zap.String("path", templatePath))
+					// Fallback to main welcome page
+					http.Redirect(w, r, "/welcome", http.StatusFound)
+					return
+				}
+				http.ServeFile(w, r, templatePath)
+			})
+	*/
 
 	// Health check endpoint
 	http.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {

@@ -1,0 +1,618 @@
+<!DOCTYPE html>
+<html lang="kz">
+<head>
+  <meta charset="UTF-8">
+  <title>MedHub - Медициналық қызметтер</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <style>
+    :root {
+      /* Light theme */
+      --bg-primary: #f0f8ff;
+      --bg-secondary: #ffffff;
+      --bg-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      --card-bg: rgba(255, 255, 255, 0.98);
+      --card-border: rgba(0, 0, 0, 0.06);
+      --text-primary: #1a202c;
+      --text-secondary: #4a5568;
+      --text-muted: #718096;
+      --accent-primary: #667eea;
+      --accent-secondary: #48bb78;
+      --accent-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      --success-gradient: linear-gradient(135deg, #48bb78 0%, #38a169 100%);
+      --doctor-gradient: linear-gradient(135deg, #3b82f6 0%, #1e40af 100%);
+      --patient-gradient: linear-gradient(135deg, #10b981 0%, #059669 100%);
+      --screening-gradient: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+      --disabled-gradient: linear-gradient(135deg, #9ca3af 0%, #6b7280 100%);
+      --input-bg: #f7fafc;
+      --input-border: #e2e8f0;
+      --input-focus: #667eea;
+      --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.1);
+      --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.15);
+      --shadow-lg: 0 10px 25px rgba(0, 0, 0, 0.2);
+      --shadow-xl: 0 20px 40px rgba(0, 0, 0, 0.25);
+      --glow: rgba(102, 126, 234, 0.5);
+      --modal-bg: rgba(0, 0, 0, 0.5);
+    }
+
+    [data-theme="dark"] {
+      /* Dark theme */
+      --bg-primary: #0f172a;
+      --bg-secondary: #1e293b;
+      --bg-gradient: linear-gradient(135deg, #1e3a8a 0%, #581c87 100%);
+      --card-bg: rgba(30, 41, 59, 0.98);
+      --card-border: rgba(255, 255, 255, 0.06);
+      --text-primary: #f1f5f9;
+      --text-secondary: #cbd5e1;
+      --text-muted: #94a3b8;
+      --accent-primary: #818cf8;
+      --accent-secondary: #34d399;
+      --accent-gradient: linear-gradient(135deg, #818cf8 0%, #6366f1 100%);
+      --success-gradient: linear-gradient(135deg, #34d399 0%, #10b981 100%);
+      --doctor-gradient: linear-gradient(135deg, #60a5fa 0%, #3b82f6 100%);
+      --patient-gradient: linear-gradient(135deg, #34d399 0%, #10b981 100%);
+      --screening-gradient: linear-gradient(135deg, #a78bfa 0%, #8b5cf6 100%);
+      --disabled-gradient: linear-gradient(135deg, #64748b 0%, #475569 100%);
+      --input-bg: #1e293b;
+      --input-border: #334155;
+      --input-focus: #818cf8;
+      --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.3);
+      --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
+      --shadow-lg: 0 10px 25px rgba(0, 0, 0, 0.5);
+      --shadow-xl: 0 20px 40px rgba(0, 0, 0, 0.6);
+      --glow: rgba(129, 140, 248, 0.5);
+      --modal-bg: rgba(0, 0, 0, 0.7);
+    }
+
+    * { 
+      box-sizing: border-box; 
+      margin: 0; 
+      padding: 0; 
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Inter', sans-serif;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      position: relative;
+      transition: all 0.3s ease;
+      overflow-x: hidden;
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    body::before {
+      content: '';
+      position: fixed;
+      top: -50%;
+      left: -50%;
+      width: 200%;
+      height: 200%;
+      background: var(--bg-gradient);
+      opacity: 0.03;
+      z-index: -2;
+      animation: gradientAnimation 25s ease-in-out infinite;
+    }
+
+    body::after {
+      content: '';
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: 
+        radial-gradient(circle at 20% 80%, var(--accent-primary) 0%, transparent 50%),
+        radial-gradient(circle at 80% 20%, var(--accent-secondary) 0%, transparent 50%);
+      opacity: 0.05;
+      z-index: -1;
+      pointer-events: none;
+    }
+
+    @keyframes gradientAnimation {
+      0%, 100% { transform: rotate(0deg); }
+      33% { transform: rotate(120deg); }
+      66% { transform: rotate(240deg); }
+    }
+
+    .lang-switch {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      display: flex;
+      gap: 8px;
+      z-index: 1000;
+    }
+
+    .lang-switch button {
+      background: var(--card-bg);
+      color: var(--text-primary);
+      border: 1px solid var(--card-border);
+      border-radius: 50px;
+      padding: 8px 16px;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 0.85rem;
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      transition: all 0.3s ease;
+      box-shadow: var(--shadow-sm);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .lang-switch button::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: -100%;
+      width: 100%;
+      height: 100%;
+      background: var(--accent-gradient);
+      transition: left 0.3s ease;
+      z-index: -1;
+    }
+
+    .lang-switch button:hover {
+      transform: translateY(-2px);
+      box-shadow: var(--shadow-md);
+      color: white;
+      border-color: transparent;
+    }
+
+    .lang-switch button:hover::before {
+      left: 0;
+    }
+
+    .lang-switch button.active {
+      background: var(--accent-gradient);
+      color: white;
+      border-color: transparent;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 480px;
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 24px;
+      box-shadow: var(--shadow-xl);
+      padding: 32px;
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      position: relative;
+      overflow: hidden;
+      transition: all 0.4s ease;
+      animation: fadeIn 0.6s ease-out;
+      text-align: center;
+    }
+
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+        transform: translateY(30px) scale(0.95);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+      }
+    }
+
+    .container::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 4px;
+      background: var(--accent-gradient);
+      animation: shimmer 2s ease-in-out infinite;
+    }
+
+    @keyframes shimmer {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.7; }
+    }
+
+    .logo {
+      width: 120px;
+      height: 120px;
+      margin: 0 auto 24px;
+      background: var(--accent-gradient);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 4rem;
+      box-shadow: var(--shadow-lg);
+      animation: logoFloat 3s ease-in-out infinite;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .logo::before {
+      content: '';
+      position: absolute;
+      top: -50%;
+      left: -50%;
+      width: 200%;
+      height: 200%;
+      background: linear-gradient(45deg, transparent, rgba(255,255,255,0.1), transparent);
+      animation: logoShine 3s linear infinite;
+    }
+
+    @keyframes logoFloat {
+      0%, 100% { transform: translateY(0) scale(1); }
+      50% { transform: translateY(-10px) scale(1.05); }
+    }
+
+    @keyframes logoShine {
+      0% { transform: translateX(-100%) translateY(-100%) rotate(45deg); }
+      100% { transform: translateX(100%) translateY(100%) rotate(45deg); }
+    }
+
+    h1 {
+      margin-bottom: 16px;
+      font-size: 2rem;
+      font-weight: 800;
+      background: var(--accent-gradient);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      line-height: 1.3;
+      letter-spacing: -0.02em;
+    }
+
+    .subtitle {
+      color: var(--text-secondary);
+      margin-bottom: 32px;
+      font-size: 1.1rem;
+      line-height: 1.6;
+      font-weight: 400;
+    }
+
+    .buttons-container {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      margin-top: 32px;
+    }
+
+    .main-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      border: none;
+      border-radius: 16px;
+      padding: 20px 24px;
+      font-size: 1.1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      position: relative;
+      overflow: hidden;
+      text-decoration: none;
+      color: white;
+      box-shadow: var(--shadow-md);
+      width: 100%;
+      letter-spacing: 0.02em;
+      min-height: 64px;
+    }
+
+    .main-btn::before {
+      content: '';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 0;
+      height: 0;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.2);
+      transform: translate(-50%, -50%);
+      transition: width 0.6s, height 0.6s;
+    }
+
+    .main-btn:hover {
+      transform: translateY(-3px);
+      box-shadow: var(--shadow-lg);
+    }
+
+    .main-btn:hover::before {
+      width: 300px;
+      height: 300px;
+    }
+
+    .main-btn:active {
+      transform: translateY(-1px);
+    }
+
+    .screening-btn {
+      background: var(--screening-gradient);
+      box-shadow: 0 6px 20px rgba(139, 92, 246, 0.3);
+    }
+
+    .screening-btn:hover {
+      box-shadow: 0 8px 25px rgba(139, 92, 246, 0.4);
+    }
+
+    .doctor-btn {
+      background: var(--disabled-gradient);
+      cursor: not-allowed;
+      box-shadow: 0 6px 20px rgba(156, 163, 175, 0.3);
+      opacity: 0.7;
+    }
+
+    .doctor-btn:hover {
+      transform: none;
+      box-shadow: 0 6px 20px rgba(156, 163, 175, 0.3);
+    }
+
+    .doctor-btn::before {
+      display: none;
+    }
+
+    .patient-btn {
+      background: var(--disabled-gradient);
+      cursor: not-allowed;
+      box-shadow: 0 6px 20px rgba(156, 163, 175, 0.3);
+      opacity: 0.7;
+    }
+
+    .patient-btn:hover {
+      transform: none;
+      box-shadow: 0 6px 20px rgba(156, 163, 175, 0.3);
+    }
+
+    .patient-btn::before {
+      display: none;
+    }
+
+    .btn-icon {
+      font-size: 1.5rem;
+      filter: drop-shadow(0 2px 4px rgba(0,0,0,0.2));
+    }
+
+    .coming-soon {
+      font-size: 0.9rem;
+      color: var(--text-muted);
+      margin-top: 4px;
+      font-style: italic;
+    }
+
+    /* Mobile optimizations */
+    @media (max-width: 480px) {
+      body {
+        padding: 12px;
+      }
+
+      .lang-switch {
+        top: 12px;
+        right: 12px;
+      }
+
+      .lang-switch button {
+        padding: 6px 14px;
+        font-size: 0.8rem;
+      }
+
+      .container {
+        padding: 24px 20px;
+        border-radius: 20px;
+        max-width: 100%;
+      }
+
+      .logo {
+        width: 100px;
+        height: 100px;
+        font-size: 3rem;
+      }
+
+      h1 {
+        font-size: 1.5rem;
+        margin-bottom: 12px;
+      }
+
+      .subtitle {
+        font-size: 1rem;
+        margin-bottom: 24px;
+      }
+
+      .main-btn {
+        padding: 18px 20px;
+        font-size: 1rem;
+        min-height: 60px;
+      }
+    }
+
+    /* Reduced motion */
+    @media (prefers-reduced-motion: reduce) {
+      * {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+      }
+    }
+  </style>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+</head>
+<body>
+  <div class="lang-switch">
+    <button onclick="setLang('kz')" id="lang-kz" class="active">ҚАЗ</button>
+    <button onclick="setLang('ru')" id="lang-ru">РУС</button>
+  </div>
+
+  <div class="container">
+    <div class="logo">🏥</div>
+    <h1 id="welcome-title">MedHub-қа қош келдіңіз!</h1>
+    <p class="subtitle" id="welcome-subtitle">
+      Сапалы медициналық қызметтерге жылдам қол жеткізу
+    </p>
+    
+    <div class="buttons-container">
+      <button class="main-btn screening-btn" onclick="openScreening()">
+        <span class="btn-icon">🔍</span>
+        <span id="btn-screening">Скрининг өту</span>
+      </button>
+      
+      <button class="main-btn doctor-btn" onclick="showComingSoon('doctor')">
+        <span class="btn-icon">👩‍⚕️</span>
+        <div>
+          <div id="btn-doctor">Дәрігер болу</div>
+          <div class="coming-soon" id="coming-soon-doctor">Жақын арада...</div>
+        </div>
+      </button>
+      
+      <button class="main-btn patient-btn" onclick="showComingSoon('patient')">
+        <span class="btn-icon">🏥</span>
+        <div>
+          <div id="btn-patient">Дәрігер керек</div>
+          <div class="coming-soon" id="coming-soon-patient">Жақын арада...</div>
+        </div>
+      </button>
+    </div>
+  </div>
+
+  <script>
+    // Translations
+    const translations = {
+      kz: {
+        'welcome-title': 'MedHub-қа қош келдіңіз!',
+        'welcome-subtitle': 'Сапалы медициналық қызметтерге жылдам қол жеткізу',
+        'btn-screening': 'Скрининг өту',
+        'btn-doctor': 'Дәрігер болу',
+        'btn-patient': 'Дәрігер керек',
+        'coming-soon-doctor': 'Жақын арада...',
+        'coming-soon-patient': 'Жақын арада...',
+        'coming-soon-message': 'Бұл функция жақын арада қосылады!'
+      },
+      ru: {
+        'welcome-title': 'Добро пожаловать в MedHub!',
+        'welcome-subtitle': 'Быстрый доступ к качественным медицинским услугам',
+        'btn-screening': 'Пройти скрининг',
+        'btn-doctor': 'Стать врачом',
+        'btn-patient': 'Нужен врач',
+        'coming-soon-doctor': 'Скоро...',
+        'coming-soon-patient': 'Скоро...',
+        'coming-soon-message': 'Эта функция скоро будет доступна!'
+      }
+    };
+
+    // Global variables
+    let currentLang = 'kz';
+
+    // Automatic theme management based on time
+    function detectSystemTheme() {
+      const hour = new Date().getHours();
+      const isDark = hour >= 20 || hour < 6;
+      return isDark ? 'dark' : 'light';
+    }
+
+    function applyTheme(theme) {
+      document.documentElement.setAttribute('data-theme', theme);
+    }
+
+    // Initialize theme
+    let currentTheme = detectSystemTheme();
+    applyTheme(currentTheme);
+
+    // Update theme based on time every minute
+    setInterval(() => {
+      const newTheme = detectSystemTheme();
+      if (newTheme !== currentTheme) {
+        currentTheme = newTheme;
+        applyTheme(currentTheme);
+      }
+    }, 60000);
+
+    // Telegram WebApp initialization
+    Telegram.WebApp.ready();
+    Telegram.WebApp.expand();
+
+    // Adapt to Telegram theme if available
+    if (Telegram.WebApp.colorScheme) {
+      currentTheme = Telegram.WebApp.colorScheme;
+      applyTheme(currentTheme);
+    }
+
+    // Listen for theme changes from Telegram
+    Telegram.WebApp.onEvent('themeChanged', function() {
+      if (Telegram.WebApp.colorScheme) {
+        currentTheme = Telegram.WebApp.colorScheme;
+        applyTheme(currentTheme);
+      }
+    });
+
+    // Language switching
+    function setLang(lang) {
+      currentLang = lang;
+      document.querySelectorAll('.lang-switch button').forEach(btn => {
+        btn.classList.remove('active');
+      });
+      document.getElementById('lang-' + lang).classList.add('active');
+      
+      updateTexts();
+    }
+
+    function updateTexts() {
+      const t = translations[currentLang];
+      
+      // Update all translatable elements
+      Object.keys(t).forEach(key => {
+        const element = document.getElementById(key);
+        if (element) {
+          element.textContent = t[key];
+        }
+      });
+    }
+
+    // Open screening page - FIXED TO STAY INSIDE MINI APP
+    function openScreening() {
+      // Navigate within the same window (stays inside Telegram Mini App)
+      window.location.href = '/screening';
+    }
+
+    // Show coming soon message
+    function showComingSoon(type) {
+      const t = translations[currentLang];
+      
+      // Show native Telegram popup if available
+      if (Telegram.WebApp.showPopup) {
+        Telegram.WebApp.showPopup({
+          title: type === 'doctor' ? t['btn-doctor'] : t['btn-patient'],
+          message: t['coming-soon-message'],
+          buttons: [{type: 'ok'}]
+        });
+      } else {
+        // Fallback to browser alert
+        alert(t['coming-soon-message']);
+      }
+    }
+
+    // Initialize app
+    function initApp() {
+      updateTexts();
+    }
+
+    // Adapt to viewport changes
+    Telegram.WebApp.onEvent('viewportChanged', function() {
+      const viewportHeight = Telegram.WebApp.viewportHeight;
+      document.body.style.minHeight = viewportHeight + 'px';
+    });
+
+    // Initialize when DOM is loaded
+    document.addEventListener('DOMContentLoaded', initApp);
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', initApp);
+    } else {
+      initApp();
+    }
+  </script>
+</body>
+</html>

@@ -424,63 +424,6 @@
       margin-bottom: 24px;
     }
 
-    .risk-level {
-      display: inline-block;
-      padding: 8px 16px;
-      border-radius: 20px;
-      font-weight: 600;
-      margin-bottom: 24px;
-    }
-
-    .risk-low {
-      background: rgba(72, 187, 120, 0.2);
-      color: #059669;
-    }
-
-    .risk-medium {
-      background: rgba(245, 158, 11, 0.2);
-      color: #d97706;
-    }
-
-    .risk-high {
-      background: rgba(239, 68, 68, 0.2);
-      color: #dc2626;
-    }
-
-    .recommendations {
-      background: var(--input-bg);
-      border-radius: 16px;
-      padding: 24px;
-      margin-top: 24px;
-      text-align: left;
-    }
-
-    .recommendations h3 {
-      color: var(--accent-primary);
-      margin-bottom: 16px;
-      font-size: 1.2rem;
-    }
-
-    .recommendations ul {
-      list-style: none;
-      padding: 0;
-    }
-
-    .recommendations li {
-      display: flex;
-      align-items: flex-start;
-      gap: 8px;
-      margin-bottom: 12px;
-      color: var(--text-secondary);
-    }
-
-    .recommendations li::before {
-      content: '✓';
-      color: var(--accent-secondary);
-      font-weight: 600;
-      margin-top: 2px;
-    }
-
     .hidden {
       display: none !important;
     }
@@ -604,14 +547,6 @@
       <div class="results-icon">🏥</div>
       <h2 id="results-title">Тест аяқталды!</h2>
       <p id="results-text">Сіздің жауаптарыңыз дәрігерге жіберілді.</p>
-      <div id="riskLevel" class="risk-level"></div>
-      
-      <div class="recommendations">
-        <h3 id="recommendations-title">Ұсыныстар:</h3>
-        <ul id="recommendationsList">
-          <!-- Recommendations will be populated here -->
-        </ul>
-      </div>
 
       <button class="btn btn-primary" onclick="submitResults()" id="submitBtn">
         <span id="btn-submit">Нәтижелерді жіберу</span>
@@ -624,7 +559,7 @@
   </div>
 
   <script>
-    // Translations
+    // Fixed translations with correct Kazakh
     const translations = {
       kz: {
         title: 'Скрининг тесті',
@@ -632,16 +567,13 @@
         'btn-prev': 'Артқа',
         'btn-next': 'Келесі',
         'btn-finish': 'Аяқтау',
-        'btn-submit': 'Нәтижелерді жіберу',
+        'btn-submit': 'Дәрігерге жіберу',
         'results-title': 'Тест аяқталды!',
-        'results-text': 'Сіздің жауаптарыңыз дәрігерге жіберілді.',
-        'recommendations-title': 'Ұсыныстар:',
-        'loading-text': 'Жіберілуде...',
-        'risk-low': 'Төмен қауіп',
-        'risk-medium': 'Орташа қауіп',
-        'risk-high': 'Жоғары қауіп',
-        'submit-success': 'Нәтижелер сәтті жіберілді!',
-        'submit-error': 'Жіберу кезінде қате орын алды.'
+        'results-text': 'Тест аяқталды! Деректер дәрігерге жіберілуге дайын.',
+        'loading-text': 'Дәрігерге жіберілуде...',
+        'submit-success': 'Деректер дәрігерге сәтті жіберілді!',
+        'submit-error': 'Жіберу кезінде қате орын алды.',
+        'doctor-contact': 'Дәрігер сізбен жақын арада хабарласады.'
       },
       ru: {
         title: 'Скрининг тест',
@@ -649,20 +581,17 @@
         'btn-prev': 'Назад',
         'btn-next': 'Далее',
         'btn-finish': 'Завершить',
-        'btn-submit': 'Отправить результаты',
+        'btn-submit': 'Отправить врачу',
         'results-title': 'Тест завершен!',
-        'results-text': 'Ваши ответы отправлены врачу.',
-        'recommendations-title': 'Рекомендации:',
-        'loading-text': 'Отправка...',
-        'risk-low': 'Низкий риск',
-        'risk-medium': 'Средний риск',
-        'risk-high': 'Высокий риск',
-        'submit-success': 'Результаты успешно отправлены!',
-        'submit-error': 'Ошибка при отправке.'
+        'results-text': 'Тест завершен! Данные готовы к отправке врачу.',
+        'loading-text': 'Отправка врачу...',
+        'submit-success': 'Данные успешно отправлены врачу!',
+        'submit-error': 'Ошибка при отправке.',
+        'doctor-contact': 'Врач свяжется с вами в ближайшее время.'
       }
     };
 
-    // Questions data based on the provided document
+    // Complete questions data with proper ordering and additional medical questions
     const questions = {
       kz: [
         {
@@ -671,9 +600,124 @@
           type: "multiple",
           options: [
             { id: "age_30", text: "Маған 30 жас немесе одан көп", points: 1 },
-            { id: "gender_male", text: "Мен ерекшемін", points: 1 },
+            { id: "gender_male", text: "Мен ермін", points: 1 },
             { id: "gender_female", text: "Мен әйелмін", points: 0 }
-          ],
+          ]
+        },
+        {
+          id: 2,
+          text: "Бойыңыз бен салмағыңыз (ДМИ есептеу үшін)",
+          type: "input",
+          fields: [
+            { id: "height", label: "Менің бойым (см)", type: "number", placeholder: "180" },
+            { id: "weight", label: "Менің салмағым (кг)", type: "number", placeholder: "86" }
+          ]
+        },
+        {
+          id: 3,
+          text: "Тұқым қуалаушылық",
+          type: "multiple",
+          options: [
+            { id: "family_cancer", text: "Жақын туыстарымда қатерлі ісік болған", points: 2 },
+            { id: "family_cardio", text: "Жақын туыстарымда 60 жасқа дейін жүрек соғысы немесе инсульт болған", points: 2 }
+          ]
+        },
+        {
+          id: 4,
+          text: "Созылмалы аурулар",
+          type: "single",
+          options: [
+            { id: "hypertension", text: "Жоғары артериялық қысым", points: 2 },
+            { id: "diabetes", text: "Қант диабеті", points: 3 },
+            { id: "cholesterol", text: "Жоғары холестерин", points: 2 },
+            { id: "no_chronic", text: "Созылмалы аурулар жоқ", points: 0 }
+          ]
+        },
+        {
+          id: 5,
+          text: "Асқорыту жүйесінен шағымдар",
+          type: "multiple",
+          options: [
+            { id: "blood_stool", text: "Нәжісте қан", points: 3 },
+            { id: "constipation", text: "Жиі қабыздық (аптасына 3 реттен аз дәрет шығару)", points: 2 },
+            { id: "heartburn", text: "Аптасына 2 рет немесе одан көп өт ауруы", points: 2 },
+            { id: "nausea", text: "Себепсіз жүрек айну немесе құсу", points: 2 },
+            { id: "unexplained_pain", text: "Түсініксіз ауырсыну (іш, кеуде қуысы, кіші жамбас)", points: 2 }
+          ]
+        },
+        {
+          id: 6,
+          text: "Зиянды әдеттер - Темекі шегу",
+          type: "single",
+          options: [
+            { id: "smoke_regular", text: "Үнемі темекі тартамын", points: 3 },
+            { id: "no_smoke", text: "Темекі тартпаймын", points: 0 }
+          ]
+        },
+        {
+          id: 7,
+          text: "Алкоголь қолдану жиілігі",
+          type: "single",
+          options: [
+            { id: "alcohol_never", text: "Ешқашан немесе өте сирек (айына 1 реттен сирек)", points: 0 },
+            { id: "alcohol_rare", text: "Сирек/орташа (айына 1-2 рет)", points: 1 },
+            { id: "alcohol_regular", text: "Үнемі, бірақ норма шегінде (аптасына 1-2 рет)", points: 2 },
+            { id: "alcohol_frequent", text: "Жиі (аптасына 3 рет немесе одан көп)", points: 3 }
+          ]
+        },
+        {
+          id: 8,
+          text: "Өмір салты",
+          type: "multiple",
+          options: [
+            { id: "low_activity", text: "Аптасына 2 реттен аз дене шынықтырумен айналысамын", points: 2 },
+            { id: "night_work", text: "Түнгі ауысымда жұмыс істеймін", points: 1 },
+            { id: "stress_work", text: "Стресс жағдайында жұмыс істеймін", points: 2 },
+            { id: "harmful_work", text: "Зиянды заттармен жұмыс істеймін (химия, шаң т.б.)", points: 2 }
+          ]
+        },
+        {
+          id: 9,
+          text: "Басқа белгілер",
+          type: "multiple",
+          options: [
+            { id: "fatigue", text: "Себепсіз жиі шаршау/әлсіздік", points: 2 },
+            { id: "fever", text: "Жұқпалы ауру белгілерісіз 37,5°-тан жоғары температура", points: 3 },
+            { id: "weight_loss", text: "Диетасыз соңғы айларда күрт арықтау", points: 3 }
+          ]
+        },
+        {
+          id: 10,
+          text: "Ұйқы және қалпына келтіру",
+          type: "multiple",
+          options: [
+            { id: "insomnia", text: "Ұйықсыздықпен жиі ауырамын", points: 2 },
+            { id: "sleep_less_6", text: "Тәулігіне 6 сағаттан аз ұйықтаймын", points: 2 },
+            { id: "snoring", text: "Ұйқыда қорылдаймын немесе тыныс алуда қиындық", points: 1 }
+          ]
+        },
+        {
+          id: 11,
+          text: "Психикалық денсаулық",
+          type: "multiple",
+          options: [
+            { id: "depression", text: "Жиі мұңаю, көңіл-күй түсуі", points: 2 },
+            { id: "anxiety", text: "Үнемі алаңдаушылық, тітіркендіргіштік", points: 2 },
+            { id: "memory_loss", text: "Есте сақтау қабілетінің нашарлауы", points: 2 }
+          ]
+        },
+        {
+          id: 12,
+          text: "Репродуктивті денсаулық (әйелдер үшін)",
+          type: "multiple",
+          options: [
+            { id: "irregular_periods", text: "Етеккір циклының бұзылуы", points: 1 },
+            { id: "breast_changes", text: "Емшекте түйіндер немесе өзгерістер", points: 3 },
+            { id: "pelvic_pain", text: "Жамбас аймағында ауырсыну", points: 2 },
+            { id: "not_applicable", text: "Маған қатысы жоқ", points: 0 }
+          ]
+        }
+      ],
       ru: [
         {
           id: 1,
@@ -766,89 +810,36 @@
             { id: "fever", text: "Температура выше 37,5° без симптомов инфекции", points: 3 },
             { id: "weight_loss", text: "Резкое похудение за последние месяцы без диеты", points: 3 }
           ]
-        }
-      ]
         },
         {
-          id: 2,
-          text: "Бойыңыз бен салмағыңыз",
-          type: "input",
-          fields: [
-            { id: "height", label: "Бойым (см)", type: "number", placeholder: "180" },
-            { id: "weight", label: "Салмағым (кг)", type: "number", placeholder: "86" }
-          ]
-        },
-        {
-          id: 3,
-          text: "Тұқым қуалаушылық",
+          id: 10,
+          text: "Сон и восстановление",
           type: "multiple",
           options: [
-            { id: "family_cancer", text: "Жақын туыстарымда қатерлі ісік болған", points: 2 },
-            { id: "family_cardio", text: "Жақын туыстарымда 60 жасқа дейін жүрек соғысы немесе инсульт болған", points: 2 }
+            { id: "insomnia", text: "Часто страдаю бессонницей", points: 2 },
+            { id: "sleep_less_6", text: "Сплю менее 6 часов в сутки", points: 2 },
+            { id: "snoring", text: "Храплю или есть затруднения дыхания во сне", points: 1 }
           ]
         },
         {
-          id: 4,
-          text: "Созылмалы аурулар",
-          type: "single",
-          options: [
-            { id: "hypertension", text: "Жоғары артериялық қысым", points: 2 },
-            { id: "diabetes", text: "Қант диабеті", points: 3 },
-            { id: "cholesterol", text: "Жоғары холестерин", points: 2 },
-            { id: "no_chronic", text: "Созылмалы аурулар жоқ", points: 0 }
-          ]
-        },
-        {
-          id: 5,
-          text: "Асқорыту жүйесінен шағымдар",
+          id: 11,
+          text: "Психическое здоровье",
           type: "multiple",
           options: [
-            { id: "blood_stool", text: "Нәжісте қан", points: 3 },
-            { id: "constipation", text: "Жиі қабыздық (аптасына 3 реттен аз дәрет шығару)", points: 2 },
-            { id: "heartburn", text: "Аптасына 2 рет немесе одан көп өт ауруы", points: 2 },
-            { id: "nausea", text: "Себепсіз жүрек айну немесе құсу", points: 2 },
-            { id: "unexplained_pain", text: "Түсініксіз ауырсыну (іш, кеуде қуысы, кіші жамбас)", points: 2 }
+            { id: "depression", text: "Частая грусть, упадок настроения", points: 2 },
+            { id: "anxiety", text: "Постоянная тревожность, раздражительность", points: 2 },
+            { id: "memory_loss", text: "Ухудшение памяти", points: 2 }
           ]
         },
         {
-          id: 6,
-          text: "Зиянды әдеттер - Темекі",
-          type: "single",
-          options: [
-            { id: "smoke_regular", text: "Үнемі темекі тартамын", points: 3 },
-            { id: "no_smoke", text: "Темекі тартпаймын", points: 0 }
-          ]
-        },
-        {
-          id: 7,
-          text: "Алкоголь қолдану жиілігі",
-          type: "single",
-          options: [
-            { id: "alcohol_never", text: "Ешқашан немесе өте сирек (айына 1 реттен сирек)", points: 0 },
-            { id: "alcohol_rare", text: "Сирек/орташа (айына 1-2 рет)", points: 1 },
-            { id: "alcohol_regular", text: "Үнемі, бірақ норма шегінде (аптасына 1-2 рет)", points: 2 },
-            { id: "alcohol_frequent", text: "Жиі (аптасына 3 рет немесе одан көп)", points: 3 }
-          ]
-        },
-        {
-          id: 8,
-          text: "Өмір салты",
+          id: 12,
+          text: "Репродуктивное здоровье (для женщин)",
           type: "multiple",
           options: [
-            { id: "low_activity", text: "Аптасына 2 реттен аз дене шынықтырумен айналысамын", points: 2 },
-            { id: "night_work", text: "Түнгі ауысымда жұмыс істеймін", points: 1 },
-            { id: "stress_work", text: "Стресс жағдайында жұмыс істеймін", points: 2 },
-            { id: "harmful_work", text: "Зиянды заттармен жұмыс істеймін (химия, шаң т.б.)", points: 2 }
-          ]
-        },
-        {
-          id: 9,
-          text: "Басқа белгілер",
-          type: "multiple",
-          options: [
-            { id: "fatigue", text: "Себепсіз жиі шаршау/әлсіздік", points: 2 },
-            { id: "fever", text: "Жұқпалы ауру белгілерісіз 37,5°-тан жоғары температура", points: 3 },
-            { id: "weight_loss", text: "Диетасыз соңғы айларда күрт арықтау", points: 3 }
+            { id: "irregular_periods", text: "Нарушения менструального цикла", points: 1 },
+            { id: "breast_changes", text: "Уплотнения или изменения в груди", points: 3 },
+            { id: "pelvic_pain", text: "Боли в области таза", points: 2 },
+            { id: "not_applicable", text: "Не применимо ко мне", points: 0 }
           ]
         }
       ]
@@ -859,6 +850,20 @@
     let currentQuestionIndex = 0;
     let answers = {};
     let userTelegramID = null;
+
+    // Helper function to close mini app
+    function closeMiniApp() {
+      console.log('Attempting to close Mini App...');
+      try {
+        if (Telegram.WebApp.close) {
+          Telegram.WebApp.close();
+        } else {
+          console.log('Mini App close function not available');
+        }
+      } catch (error) {
+        console.error('Error closing Mini App:', error);
+      }
+    }
 
     // Automatic theme management
     function detectSystemTheme() {
@@ -947,7 +952,7 @@
         return `
           <div class="options">
             ${questionData.options.map(option => `
-              <div class="option" onclick="selectSingleOption('${questionData.id}', '${option.id}', ${option.points})">
+              <div class="option ${answers[questionData.id] === option.id ? 'selected' : ''}" onclick="selectSingleOption('${questionData.id}', '${option.id}', ${option.points})">
                 <input type="radio" name="q${questionData.id}" value="${option.id}" ${answers[questionData.id] === option.id ? 'checked' : ''}>
                 <label>${option.text}</label>
               </div>
@@ -958,7 +963,7 @@
         return `
           <div class="options">
             ${questionData.options.map(option => `
-              <div class="option" onclick="toggleMultipleOption('${questionData.id}', '${option.id}', ${option.points})">
+              <div class="option ${answers[questionData.id] && answers[questionData.id].includes(option.id) ? 'selected' : ''}" onclick="toggleMultipleOption('${questionData.id}', '${option.id}', ${option.points})">
                 <input type="checkbox" name="q${questionData.id}" value="${option.id}" ${answers[questionData.id] && answers[questionData.id].includes(option.id) ? 'checked' : ''}>
                 <label>${option.text}</label>
               </div>
@@ -1052,97 +1057,7 @@
       }
     }
 
-    function calculateRisk() {
-      let totalPoints = 0;
-      
-      // Calculate BMI if height and weight are provided
-      if (answers.height && answers.weight) {
-        const height = parseFloat(answers.height) / 100; // convert to meters
-        const weight = parseFloat(answers.weight);
-        const bmi = weight / (height * height);
-        
-        if (bmi > 30) {
-          totalPoints += 2; // Obesity
-        } else if (bmi > 25) {
-          totalPoints += 1; // Overweight
-        }
-      }
-      
-      // Sum up all points from answers
-      Object.keys(answers).forEach(key => {
-        if (key.endsWith('_points')) {
-          const points = answers[key];
-          if (Array.isArray(points)) {
-            totalPoints += points.reduce((sum, p) => sum + p, 0);
-          } else {
-            totalPoints += points || 0;
-          }
-        }
-      });
-      
-      return totalPoints;
-    }
-
-    function getRiskLevel(points) {
-      if (points <= 5) return 'low';
-      if (points <= 12) return 'medium';
-      return 'high';
-    }
-
-    function getRecommendations(riskLevel, lang) {
-      const recommendations = {
-        kz: {
-          low: [
-            "Жылына бір рет профилактикалық тексеруден өтіңіз",
-            "Дұрыс тамақтануды ұстаныңыз",
-            "Тұрақты дене шынықтырумен айналысыңыз",
-            "Зиянды әдеттерден арылыңыз"
-          ],
-          medium: [
-            "Жылына 2 рет дәрігерге барыңыз",
-            "Қосымша тексерулер жасатыңыз",
-            "Стрессті басқаруды үйреніңіз",
-            "Дұрыс демалыс режимін ұстаныңыз",
-            "Мамандармен кеңесіңіз"
-          ],
-          high: [
-            "Дереу дәрігермен кеңесіңіз",
-            "Толық медициналық тексеруден өтіңіз",
-            "Мамандардың нұсқауларын орындаңыз",
-            "Өмір салтын өзгертіңіз",
-            "Тұрақты бақылауда болыңыз"
-          ]
-        },
-        ru: {
-          low: [
-            "Проходите профилактические осмотры раз в год",
-            "Придерживайтесь правильного питания",
-            "Регулярно занимайтесь физической активностью",
-            "Откажитесь от вредных привычек"
-          ],
-          medium: [
-            "Посещайте врача 2 раза в год",
-            "Пройдите дополнительные обследования",
-            "Научитесь управлять стрессом",
-            "Соблюдайте правильный режим отдыха",
-            "Консультируйтесь со специалистами"
-          ],
-          high: [
-            "Немедленно обратитесь к врачу",
-            "Пройдите полное медицинское обследование",
-            "Следуйте рекомендациям специалистов",
-            "Измените образ жизни",
-            "Находитесь под постоянным наблюдением"
-          ]
-        }
-      };
-      
-      return recommendations[lang][riskLevel] || [];
-    }
-
     function showResults() {
-      const points = calculateRisk();
-      const riskLevel = getRiskLevel(points);
       const t = translations[currentLang];
       
       // Hide question container and navigation
@@ -1153,23 +1068,115 @@
       const resultsDiv = document.getElementById('results');
       resultsDiv.classList.remove('hidden');
       
-      // Update risk level display
-      const riskLevelDiv = document.getElementById('riskLevel');
-      riskLevelDiv.textContent = t[`risk-${riskLevel}`];
-      riskLevelDiv.className = `risk-level risk-${riskLevel}`;
+      // Update results text
+      const resultsText = document.getElementById('results-text');
+      resultsText.textContent = t['results-text'];
       
-      // Update recommendations
-      const recommendations = getRecommendations(riskLevel, currentLang);
-      const recommendationsList = document.getElementById('recommendationsList');
-      recommendationsList.innerHTML = recommendations.map(rec => `<li>${rec}</li>`).join('');
+      // Update submit button text
+      const submitBtn = document.getElementById('btn-submit');
+      submitBtn.textContent = t['btn-submit'];
       
       // Update progress to 100%
       document.getElementById('progressFill').style.width = '100%';
     }
 
+    // Function to format admin message in proper order
+    function formatAdminMessage(answers, language, bmi) {
+      const isKazakh = language === 'kz';
+      const header = isKazakh 
+        ? '📋 ЖАҢА СКРИНИНГ ДЕРЕКТЕРІ' 
+        : '📋 НОВЫЕ ДАННЫЕ СКРИНИНГА';
+      
+      const userLabel = isKazakh 
+        ? '👤 Пайдаланушы ID' 
+        : '👤 ID пользователя';
+      
+      const timeLabel = isKazakh 
+        ? '🕒 Уақыт' 
+        : '🕒 Время';
+      
+      const langLabel = isKazakh 
+        ? '🌐 Тіл' 
+        : '🌐 Язык';
+
+      const langDisplay = isKazakh 
+        ? '🇰🇿 Қазақша' 
+        : '🇷🇺 Русский';
+
+      const answersLabel = isKazakh 
+        ? '📝 ПАЙДАЛАНУШЫ ЖАУАПТАРЫ' 
+        : '📝 ОТВЕТЫ ПОЛЬЗОВАТЕЛЯ';
+
+      const conclusionLabel = isKazakh 
+        ? '👨‍⚕️ ДӘРІГЕРДІҢ ҚОРЫТЫНДЫСЫ КҮТІЛУДЕ' 
+        : '👨‍⚕️ ОЖИДАЕТСЯ ЗАКЛЮЧЕНИЕ ВРАЧА';
+
+      let message = `${header}\n\n`;
+      message += `${userLabel}: ${userTelegramID}\n`;
+      message += `${timeLabel}: ${new Date().toLocaleString('ru-RU', {timeZone: 'Asia/Almaty'})}\n`;
+      message += `${langLabel}: ${langDisplay}\n\n`;
+      message += `${answersLabel}:\n\n`;
+
+      // Process answers in order from 1 to 12
+      for (let i = 1; i <= 12; i++) {
+        const questionData = questions[language].find(q => q.id === i);
+        if (!questionData) continue;
+
+        const questionNumber = `${i}️⃣`;
+        const questionTitle = questionData.text;
+        
+        message += `${questionNumber} ${questionTitle}:\n`;
+
+        if (questionData.type === 'input') {
+          // Handle input fields (height/weight)
+          if (i === 2) {
+            const height = answers.height || '';
+            const weight = answers.weight || '';
+            const heightLabel = isKazakh ? 'Бойы' : 'Рост';
+            const weightLabel = isKazakh ? 'Салмағы' : 'Вес';
+            const bmiLabel = isKazakh ? 'ДМИ' : 'ИМТ';
+            
+            if (height) message += `📏 ${heightLabel}: ${height} см\n`;
+            if (weight) message += `⚖️ ${weightLabel}: ${weight} кг\n`;
+            if (bmi) message += `📊 ${bmiLabel}: ${bmi.toFixed(1)}\n`;
+          }
+        } else {
+          // Handle single/multiple choice questions
+          const questionAnswers = answers[i];
+          if (questionAnswers) {
+            if (Array.isArray(questionAnswers)) {
+              // Multiple choice
+              questionAnswers.forEach(answerId => {
+                const option = questionData.options.find(opt => opt.id === answerId);
+                if (option) {
+                  message += `  ✓ ${option.text}\n`;
+                }
+              });
+            } else {
+              // Single choice
+              const option = questionData.options.find(opt => opt.id === questionAnswers);
+              if (option) {
+                message += `  ✓ ${option.text}\n`;
+              }
+            }
+          }
+        }
+        message += '\n';
+      }
+
+      message += `${conclusionLabel}\n`;
+      
+      return message;
+    }
+
     async function submitResults() {
       if (!userTelegramID) {
-        alert('Telegram ID не найден');
+        const t = translations[currentLang];
+        if (Telegram.WebApp.showAlert) {
+          Telegram.WebApp.showAlert('Telegram ID табылмады / Telegram ID не найден');
+        } else {
+          alert('Telegram ID табылмады / Telegram ID не найден');
+        }
         return;
       }
 
@@ -1182,45 +1189,62 @@
       loadingDiv.classList.remove('hidden');
       
       try {
-        const points = calculateRisk();
-        const riskLevel = getRiskLevel(points);
-        
-        const resultData = {
+        // Calculate BMI if height and weight are provided
+        let bmi = null;
+        if (answers.height && answers.weight) {
+          const height = parseFloat(answers.height) / 100; // convert to meters
+          const weight = parseFloat(answers.weight);
+          bmi = weight / (height * height);
+        }
+
+        // Create formatted data for admin message
+        const adminData = {
           user_id: userTelegramID,
-          answers: answers,
-          total_points: points,
-          risk_level: riskLevel,
-          recommendations: getRecommendations(riskLevel, currentLang),
           timestamp: new Date().toISOString(),
-          language: currentLang
+          language: currentLang,
+          bmi: bmi,
+          answers: answers,
+          formatted_message: formatAdminMessage(answers, currentLang, bmi)
         };
+
+        console.log('Submitting screening data:', adminData);
 
         const response = await fetch('/api/screening/submit', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json'
           },
-          body: JSON.stringify(resultData)
+          body: JSON.stringify(adminData)
         });
 
+        console.log('Response status:', response.status);
+
         if (response.ok) {
-          // Show success message
+          const responseData = await response.json();
+          console.log('Server response:', responseData);
+          
+          // Hide loading first
+          loadingDiv.classList.add('hidden');
+          
+          // Show success message and then close
           if (Telegram.WebApp.showPopup) {
             Telegram.WebApp.showPopup({
-              title: '✅',
-              message: t['submit-success'],
-              buttons: [{type: 'ok'}]
-            }, () => {
-              // Close the web app or redirect
-              if (Telegram.WebApp.close) {
-                Telegram.WebApp.close();
-              }
+              title: '✅ Сәттілік / Успех',
+              message: t['submit-success'] + '\n\n' + t['doctor-contact'],
+              buttons: [{id: 'ok', type: 'ok', text: 'Жабу / Закрыть'}]
+            }, (buttonId) => {
+              console.log('Popup closed, button:', buttonId);
+              closeMiniApp();
             });
           } else {
-            alert(t['submit-success']);
+            // Fallback for browsers
+            alert(t['submit-success'] + '\n\n' + t['doctor-contact']);
+            closeMiniApp();
           }
         } else {
-          throw new Error('Server error');
+          const errorText = await response.text();
+          console.error('Server error:', response.status, errorText);
+          throw new Error(`Server error: ${response.status}`);
         }
         
       } catch (error) {
@@ -1230,10 +1254,12 @@
         loadingDiv.classList.add('hidden');
         resultsDiv.classList.remove('hidden');
         
+        const errorMessage = t['submit-error'] + (error.message ? ': ' + error.message : '');
+        
         if (Telegram.WebApp.showAlert) {
-          Telegram.WebApp.showAlert(t['submit-error']);
+          Telegram.WebApp.showAlert(errorMessage);
         } else {
-          alert(t['submit-error']);
+          alert(errorMessage);
         }
       }
     }
@@ -1260,8 +1286,6 @@
     });
 
     // Initialize when DOM is loaded
-    document.addEventListener('DOMContentLoaded', initApp);
-
     if (document.readyState === 'loading') {
       document.addEventListener('DOMContentLoaded', initApp);
     } else {
