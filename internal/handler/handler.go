@@ -120,11 +120,12 @@ func (h *Handler) handleScreenChat(ctx context.Context, b *bot.Bot, update *mode
 
 	switch {
 	case update.Message.Text != "":
+		// Remove ParseMode to avoid markdown parsing errors
 		_, err = b.SendMessage(ctx, &bot.SendMessageParams{
 			ChatID:         userID,
 			Text:           update.Message.Text,
 			ProtectContent: true,
-			ParseMode:      models.ParseModeMarkdown,
+			// Removed ParseMode: models.ParseModeMarkdown to fix the error
 		})
 
 	case len(update.Message.Photo) > 0:
@@ -179,7 +180,11 @@ func (h *Handler) handleScreenChat(ctx context.Context, b *bot.Bot, update *mode
 	}
 
 	if err != nil {
-		h.logger.Error("error forwarding message to user", zap.Error(err))
+		h.logger.Error("error forwarding message to user", 
+			zap.Error(err),
+			zap.Int64("admin_id", adminID),
+			zap.Int64("user_id", userID),
+			zap.String("message_text", update.Message.Text))
 		_, _ = b.SendMessage(ctx, &bot.SendMessageParams{
 			ChatID: adminID,
 			Text:   "❌ Хабарламаны жіберу кезінде қате орын алды.",
@@ -199,6 +204,19 @@ func (h *Handler) handleScreenChat(ctx context.Context, b *bot.Bot, update *mode
 		})
 	}
 }
+
+// Alternative version with proper markdown escaping if you want to keep markdown
+func escapeMarkdownV2(text string) string {
+	// Characters that need to be escaped in MarkdownV2
+	specialChars := []string{"_", "*", "[", "]", "(", ")", "~", "`", ">", "#", "+", "-", "=", "|", "{", "}", ".", "!"}
+	
+	result := text
+	for _, char := range specialChars {
+		result = strings.ReplaceAll(result, char, "\\"+char)
+	}
+	return result
+}
+
 
 // Exit screening chat
 func (h *Handler) exitScreenChat(ctx context.Context, b *bot.Bot, adminID int64) {
@@ -225,11 +243,18 @@ func (h *Handler) exitScreenChat(ctx context.Context, b *bot.Bot, adminID int64)
 		if err != nil {
 			h.logger.Error("error sending chat exit message", zap.Error(err))
 		}
-
+        // Notify admin
+		// Notify admin
+		markup := &models.InlineKeyboardMarkup{
+			InlineKeyboard: [][]models.InlineKeyboardButton{{
+				{Text: "Медициналық жаңалықтар", URL: "https://t.me/chek_izi"},
+			}},
+		}
 		// Notify user
 		_, err = b.SendMessage(ctx, &bot.SendMessageParams{
 			ChatID: userID,
 			Text:   "🏥 Дәрігермен кеңесу аяқталды. Қосымша сұрақтарыңыз болса, қайта хабарласыңыз.",
+			ReplyMarkup: markup,
 		})
 		if err != nil {
 			h.logger.Error("error sending chat exit message to user", zap.Error(err))
@@ -680,6 +705,12 @@ func (h *Handler) sendFormattedScreeningToAdmin(ctx context.Context, b *bot.Bot,
 
 		_, err := b.SendMessage(ctx, &bot.SendMessageParams{
 			ChatID:      h.cfg.AdminID,
+			Text:        msg,
+			ReplyMarkup: sendMarkup,
+		})
+
+		_, err = b.SendMessage(ctx, &bot.SendMessageParams{
+			ChatID:      h.cfg.AdminID2,
 			Text:        msg,
 			ReplyMarkup: sendMarkup,
 		})

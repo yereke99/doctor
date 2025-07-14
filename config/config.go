@@ -7,6 +7,7 @@ type Config struct {
 	AvaDir                        string `json:"avaDir"`
 	DocsDir                       string `json:"docsDir"`
 	AdminID                       int64
+	AdminID2                       int64
 	RedisAddr                     string `json:"redis_addr"`     // Адрес Redis
 	RedisPassword                 string `json:"redis_password"` // Пароль для Redis
 	RedisDB                       int    `json:"redis_db"`       // Номер базы данных Redis
@@ -27,6 +28,7 @@ func NewConfig() (*Config, error) {
 		AvaDir:                        "./ava",
 		DocsDir:                       "./documents",
 		AdminID:                       800703982,
+        AdminID2:                      7012944372,
 		RedisAddr:                     "localhost:6379",
 		RedisPassword:                 "",
 		RedisDB:                       0,

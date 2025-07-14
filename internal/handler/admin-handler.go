@@ -25,11 +25,11 @@ const (
 )
 
 func (h *Handler) AdminHandler(ctx context.Context, b *bot.Bot, update *models.Update) {
-	if update.Message == nil || update.Message.From.ID != h.cfg.AdminID {
+	if update.Message == nil || update.Message.From.ID != h.cfg.AdminID || update.Message.From.ID != h.cfg.AdminID2 {
 		return
 	}
 
-	adminId := h.cfg.AdminID
+	adminId := update.Message.From.ID
 	h.logger.Info("Admin handler", zap.Any("update", update))
 
 	state, err := h.redisRepo.GetUserState(ctx, adminId)
